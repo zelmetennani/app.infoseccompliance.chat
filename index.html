@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered compliance insights and guidance for your organization. Join the waitlist today.">
+    <meta property="og:title" content="Infosec Compliance Chat - AI-Powered Compliance Insights">
+    <meta property="og:description" content="Get instant compliance guidance powered by AI. Join the waitlist for early access.">
+    <meta property="og:type" content="website">
+    <title>Infosec Compliance Chat - AI Compliance Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Add Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1 class="fade-in">AI-Powered Compliance Insights at Your Fingertips</h1>
+            <p class="subtitle fade-in">Get instant answers to your compliance questions using advanced AI. 
+               Navigate complex regulatory requirements with confidence and efficiency.</p>
+        </header>
+
+        <section class="waitlist-section fade-in">
+            <h2>Join the Waitlist</h2>
+            <p>Be among the first to experience the future of compliance guidance.</p>
+            
+            <div class="auth-buttons">
+                <form id="signInForm" class="signup-form">
+                    <div class="form-group">
+                        <input type="email" id="signInEmail" name="email" placeholder="Email" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="signInPassword" name="password" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="cta-button">Sign In</button>
+                </form>
+            </div>
+
+            <form id="waitlistForm" class="signup-form hidden">
+                <div class="form-group">
+                    <input type="text" id="name" name="name" placeholder="Your Name" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="email" name="email" placeholder="Your Email" required>
+                </div>
+                <button type="submit" class="cta-button">Join Waitlist</button>
+            </form>
+
+            <div id="confirmationMessage" class="hidden">
+                Thanks for joining! We'll keep you updated on our launch.
+            </div>
+        </section>
+
+        <footer>
+            <p>©<script>document.write(new Date().getFullYear());</script> Infosec Compliance Chat. All rights reserved.</p>
+        </footer>
+    </main>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 

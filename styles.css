@@ -1,0 +1,162 @@
+:root {
+    --primary-color: #2563eb;
+    --text-color: #1f2937;
+    --background-color: #ffffff;
+    --accent-color: #dbeafe;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    line-height: 1.2;
+}
+
+.subtitle {
+    font-size: 1.2rem;
+    color: #4b5563;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.waitlist-section {
+    background-color: var(--accent-color);
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.signup-form {
+    max-width: 400px;
+    margin: 2rem auto;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.cta-button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    width: 100%;
+}
+
+.cta-button:hover {
+    background-color: #1d4ed8;
+}
+
+.hidden {
+    display: none;
+}
+
+#confirmationMessage {
+    background-color: #10b981;
+    color: white;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+footer {
+    text-align: center;
+    color: #6b7280;
+    margin-top: 3rem;
+}
+
+/* Animations */
+.fade-in {
+    animation: fadeIn 0.8s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2rem;
+    }
+    
+    .container {
+        padding: 1rem;
+    }
+    
+    .waitlist-section {
+        padding: 1.5rem;
+    }
+}
+
+.auth-buttons {
+    margin: 2rem auto;
+    max-width: 400px;
+}
+
+input[type="password"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+input[type="password"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+} 

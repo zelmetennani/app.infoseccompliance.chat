@@ -3,22 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>User Dashboard</title>
+  <title>InfoSec Compliance Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding-top: 20px;
+    }
+    .sidebar {
+      height: calc(100vh - 40px);
+      border-right: 1px solid #dee2e6;
+      padding: 20px;
+    }
+    .chat-container {
+      height: calc(100vh - 40px);
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .message {
+      margin-bottom: 15px;
+      padding: 10px 15px;
+      border-radius: 10px;
+      max-width: 80%;
+    }
+    .user-message {
+      background-color: #d1ecf1;
+      margin-left: auto;
+    }
+    .ai-message {
+      background-color: #e2e3e5;
+    }
+    .chat-input {
+      padding: 15px;
+      background-color: #fff;
+      border-top: 1px solid #dee2e6;
+    }
+    .nav-link.active {
+      background-color: #f8f9fa;
+    }
+    .auth-container {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 20px;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+      background-color: #fff;
+    }
+    .section {
+      display: none;
+    }
+  </style>
 </head>
 <body>
-  <h1>Welcome to Your Dashboard</h1>
-  <p><strong>Name:</strong> <span id="userName"></span></p>
-  <p><strong>Email:</strong> <span id="userEmail"></span></p>
-  <p><strong>Status:</strong> <span id="userStatus"></span></p>
+  <!-- Dashboard Section -->
+  <div id="dashboard-section" class="section container">
+    <h1>Welcome to Your Dashboard</h1>
+    <p><strong>Name:</strong> <span id="userName"></span></p>
+    <p><strong>Email:</strong> <span id="userEmail"></span></p>
+    <p><strong>Status:</strong> <span id="userStatus"></span></p>
 
-  <h2>Your Conversations</h2>
-  <div id="conversationHistory"></div>
+    <h2>Your Conversations</h2>
+    <div id="conversationHistory"></div>
 
-  <button onclick="signOut()">Sign Out</button>
+    <button class="btn btn-primary" onclick="showChatSection()">Start New Chat</button>
+    <button class="btn btn-danger" onclick="signOut()">Sign Out</button>
+  </div>
+
+  <!-- Chat Section -->
+  <div id="chat-section" class="section container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <div class="col-md-3 col-lg-2 sidebar">
+        <h4 class="mb-4">InfoSec Compliance</h4>
+        
+        <!-- Navigation -->
+        <div class="mb-4">
+          <div class="nav flex-column nav-pills">
+            <a class="nav-link" href="#" onclick="showDashboardSection()">Dashboard</a>
+            <a class="nav-link active" href="#chat">Chat</a>
+            <a class="nav-link" href="#history">History</a>
+            <a class="nav-link" href="#settings">Settings</a>
+          </div>
+        </div>
+        
+        <!-- Chat history -->
+        <div class="mb-4">
+          <h6>Recent Chats</h6>
+          <div class="list-group" id="recentChats">
+            <!-- Recent chats will be loaded here -->
+          </div>
+        </div>
+        
+        <!-- User profile and logout -->
+        <div class="mt-auto">
+          <div class="d-flex align-items-center mb-3">
+            <div class="me-2">
+              <img src="https://via.placeholder.com/40" class="rounded-circle" alt="Profile">
+            </div>
+            <div>
+              <div class="fw-bold" id="chatUserName">User Name</div>
+              <small class="text-muted" id="chatUserEmail">user@example.com</small>
+            </div>
+          </div>
+          <button id="logoutBtn" class="btn btn-outline-danger w-100">Logout</button>
+        </div>
+      </div>
+      
+      <!-- Main content area -->
+      <div class="col-md-9 col-lg-10 chat-container">
+        <!-- Chat header -->
+        <div class="p-3 border-bottom">
+          <h5>InfoSec Compliance Assistant</h5>
+          <p class="text-muted mb-0">Ask questions about security compliance, regulations, and best practices</p>
+        </div>
+        
+        <!-- Chat messages -->
+        <div class="chat-messages" id="chatMessages">
+          <div class="message ai-message">
+            <p class="mb-0">Hello! I'm your InfoSec Compliance Assistant. How can I help you today?</p>
+          </div>
+          <!-- Messages will be added here dynamically -->
+        </div>
+        
+        <!-- Chat input -->
+        <div class="chat-input">
+          <form id="chatForm">
+            <div class="input-group">
+              <input type="text" id="messageInput" class="form-control" placeholder="Type your message here...">
+              <button class="btn btn-primary" type="submit">Send</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-firestore.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
     // Initialize Firebase (add your firebaseConfig object here)
     const firebaseConfig = {
@@ -31,12 +160,17 @@
     };
     firebase.initializeApp(firebaseConfig);
 
+    // DOM elements
+    const dashboardSection = document.getElementById('dashboard-section');
+    const chatSection = document.getElementById('chat-section');
+    
     // Check Auth Status and Retrieve Data
     function checkAuthStatus() {
       const token = localStorage.getItem("authToken");
 
       if (!token) {
-        window.location.href = "https://infoseccompliance.chat"; // Redirect if no token
+        // Redirect to landing page if no token
+        window.location.href = "https://infoseccompliance.chat";
         return;
       }
 
@@ -44,9 +178,23 @@
         const uid = decodedToken.uid;
         console.log("User authenticated:", uid);
         loadUserData(uid); // Load user data from Firestore
+        showDashboardSection(); // Show the dashboard by default
       }).catch((error) => {
         console.error("Token verification failed:", error);
+        // Redirect to landing page on auth error
+        window.location.href = "https://infoseccompliance.chat";
       });
+    }
+
+    // Show/hide different sections of the app
+    function showDashboardSection() {
+      dashboardSection.style.display = 'block';
+      chatSection.style.display = 'none';
+    }
+    
+    function showChatSection() {
+      dashboardSection.style.display = 'none';
+      chatSection.style.display = 'block';
     }
 
     // Fetch user data from Firestore
@@ -57,19 +205,150 @@
           const userData = doc.data();
           console.log("User data:", userData);
           displayUserData(userData);
+          loadConversationHistory(uid);
         } else {
           console.error("No user data found");
+          // Create a new user profile if none exists
+          createNewUserProfile(uid);
         }
       }).catch((error) => {
         console.error("Error fetching user data:", error);
       });
     }
 
+    // Create a new user profile in Firestore
+    function createNewUserProfile(uid) {
+      const user = firebase.auth().currentUser;
+      const db = firebase.firestore();
+      
+      const userData = {
+        uid: uid,
+        email: user.email,
+        name: user.displayName || 'User',
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        preferences: {
+          theme: 'light',
+          notifications: true
+        }
+      };
+      
+      db.collection('users').doc(uid).set(userData)
+        .then(() => {
+          console.log("User profile created");
+          displayUserData(userData);
+        })
+        .catch((error) => {
+          console.error("Error creating user profile:", error);
+        });
+    }
+
     // Display user data on the page
     function displayUserData(userData) {
-      document.getElementById("userName").textContent = userData.name;
-      document.getElementById("userEmail").textContent = userData.email;
-      document.getElementById("userStatus").textContent = userData.status;
+      document.getElementById("userName").textContent = userData.name || 'User';
+      document.getElementById("userEmail").textContent = userData.email || '';
+      document.getElementById("userStatus").textContent = userData.status || 'active';
+      
+      // Also update the chat interface with user info
+      document.getElementById("chatUserName").textContent = userData.name || 'User';
+      document.getElementById("chatUserEmail").textContent = userData.email || '';
+    }
+
+    // Load conversation history
+    function loadConversationHistory(uid) {
+      const db = firebase.firestore();
+      const conversationHistoryDiv = document.getElementById('conversationHistory');
+      const recentChatsDiv = document.getElementById('recentChats');
+      
+      // Clear existing content
+      conversationHistoryDiv.innerHTML = '';
+      recentChatsDiv.innerHTML = '';
+      
+      db.collection('conversations')
+        .where('userId', '==', uid)
+        .orderBy('lastUpdated', 'desc')
+        .limit(5)
+        .get()
+        .then((querySnapshot) => {
+          if (querySnapshot.empty) {
+            conversationHistoryDiv.innerHTML = '<p>No conversations yet. Start a new chat!</p>';
+            return;
+          }
+          
+          querySnapshot.forEach((doc) => {
+            const conversation = doc.data();
+            const date = conversation.lastUpdated ? new Date(conversation.lastUpdated.toDate()).toLocaleString() : 'Unknown date';
+            
+            // Add to dashboard
+            const dashboardItem = document.createElement('div');
+            dashboardItem.className = 'card mb-3';
+            dashboardItem.innerHTML = `
+              <div class="card-body">
+                <h5 class="card-title">${conversation.title || 'Untitled Conversation'}</h5>
+                <h6 class="card-subtitle mb-2 text-muted">${date}</h6>
+                <p class="card-text">${conversation.preview || 'No preview available'}</p>
+                <button class="btn btn-sm btn-outline-primary open-chat" data-id="${doc.id}">Continue</button>
+              </div>
+            `;
+            conversationHistoryDiv.appendChild(dashboardItem);
+            
+            // Add to sidebar
+            const sidebarItem = document.createElement('a');
+            sidebarItem.href = '#';
+            sidebarItem.className = 'list-group-item list-group-item-action';
+            sidebarItem.dataset.id = doc.id;
+            sidebarItem.textContent = conversation.title || 'Untitled Conversation';
+            recentChatsDiv.appendChild(sidebarItem);
+            
+            // Add event listener
+            sidebarItem.addEventListener('click', function(e) {
+              e.preventDefault();
+              loadConversation(doc.id);
+            });
+          });
+          
+          // Add event listeners to "Continue" buttons
+          document.querySelectorAll('.open-chat').forEach(button => {
+            button.addEventListener('click', function() {
+              const conversationId = this.dataset.id;
+              loadConversation(conversationId);
+            });
+          });
+        })
+        .catch((error) => {
+          console.error("Error loading conversations:", error);
+          conversationHistoryDiv.innerHTML = '<p>Error loading conversations. Please try again later.</p>';
+        });
+    }
+
+    // Load a specific conversation
+    function loadConversation(conversationId) {
+      const db = firebase.firestore();
+      const chatMessages = document.getElementById('chatMessages');
+      
+      // Clear existing messages
+      chatMessages.innerHTML = '';
+      
+      // Show chat section
+      showChatSection();
+      
+      db.collection('conversations').doc(conversationId)
+        .collection('messages')
+        .orderBy('timestamp')
+        .get()
+        .then((querySnapshot) => {
+          querySnapshot.forEach((doc) => {
+            const message = doc.data();
+            addMessage(message.text, message.sender, false);
+          });
+          
+          // Scroll to bottom
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        })
+        .catch((error) => {
+          console.error("Error loading messages:", error);
+          addMessage("Error loading conversation. Please try again.", "ai", false);
+        });
     }
 
     // Sign Out function
@@ -82,8 +361,149 @@
       });
     }
 
-    // Call checkAuthStatus when the page loads
-    checkAuthStatus();
+    // Handle chat functionality
+    function setupChatFunctionality() {
+      const chatForm = document.getElementById('chatForm');
+      const messageInput = document.getElementById('messageInput');
+      
+      chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const message = messageInput.value.trim();
+        if (message) {
+          // Add user message to chat
+          addMessage(message, 'user', true);
+          
+          // Clear input
+          messageInput.value = '';
+          
+          // Simulate AI response (replace with actual API call)
+          setTimeout(() => {
+            const aiResponse = "Thank you for your question about InfoSec compliance. This is a simulated response. In a real application, this would be connected to an AI backend or API.";
+            addMessage(aiResponse, 'ai', true);
+          }, 1000);
+        }
+      });
+    }
+
+    // Function to add message to chat
+    function addMessage(text, sender, save = true) {
+      const chatMessages = document.getElementById('chatMessages');
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('message');
+      messageDiv.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
+      
+      const messagePara = document.createElement('p');
+      messagePara.classList.add('mb-0');
+      messagePara.textContent = text;
+      
+      messageDiv.appendChild(messagePara);
+      chatMessages.appendChild(messageDiv);
+      
+      // Scroll to bottom
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      
+      // If this is a real app, you would also save the message to Firestore here
+      if (save && firebase.auth().currentUser) {
+        saveMessageToFirestore(text, sender);
+      }
+    }
+
+    // Save message to Firestore
+    function saveMessageToFirestore(text, sender) {
+      const db = firebase.firestore();
+      const uid = firebase.auth().currentUser.uid;
+      
+      // Get active conversation or create a new one
+      let conversationId = localStorage.getItem('activeConversation');
+      
+      if (!conversationId) {
+        // Create a new conversation
+        const newConversation = {
+          userId: uid,
+          title: 'New Conversation',
+          preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+          lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        db.collection('conversations').add(newConversation)
+          .then((docRef) => {
+            conversationId = docRef.id;
+            localStorage.setItem('activeConversation', conversationId);
+            saveMessage(conversationId, text, sender);
+          })
+          .catch((error) => {
+            console.error("Error creating conversation:", error);
+          });
+      } else {
+        saveMessage(conversationId, text, sender);
+      }
+    }
+
+    // Save individual message
+    function saveMessage(conversationId, text, sender) {
+      const db = firebase.firestore();
+      
+      const messageData = {
+        text: text,
+        sender: sender,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      
+      // Add message to conversation
+      db.collection('conversations').doc(conversationId)
+        .collection('messages').add(messageData)
+        .then(() => {
+          console.log("Message saved");
+          
+          // Update conversation preview and timestamp
+          db.collection('conversations').doc(conversationId).update({
+            preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        })
+        .catch((error) => {
+          console.error("Error saving message:", error);
+        });
+    }
+
+    // Start a new conversation
+    function startNewConversation() {
+      // Clear active conversation
+      localStorage.removeItem('activeConversation');
+      
+      // Clear chat messages
+      const chatMessages = document.getElementById('chatMessages');
+      chatMessages.innerHTML = '';
+      
+      // Add welcome message
+      addMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'ai', false);
+      
+      // Show chat section
+      showChatSection();
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+      // Setup logout button
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', signOut);
+      }
+      
+      // Setup new chat button
+      const newChatBtn = document.querySelector('.btn-primary[onclick="showChatSection()"]');
+      if (newChatBtn) {
+        newChatBtn.addEventListener('click', startNewConversation);
+      }
+      
+      // Setup chat functionality
+      setupChatFunctionality();
+      
+      // Check auth status on page load
+      checkAuthStatus();
+    });
   </script>
 </body>
 </html>

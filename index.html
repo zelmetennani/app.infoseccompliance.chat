@@ -359,6 +359,7 @@
     function signOut() {
       auth.signOut().then(() => {
         localStorage.removeItem("activeConversation");
+        localStorage.removeItem("justLoggedIn");
         window.location.href = "https://infoseccompliance.chat";
       }).catch((error) => {
         console.error("Sign Out Error:", error.message);
@@ -475,12 +476,28 @@
     function checkAuthStatus() {
       console.log("Checking auth status...");
       
+      // Get the current URL to determine if we're on the app page
+      const currentUrl = window.location.href;
+      console.log("Current URL:", currentUrl);
+      
+      // Check if we're already on the app page
+      const isAppPage = currentUrl.includes('app.infoseccompliance.chat') || 
+                        currentUrl.includes('/app') ||
+                        currentUrl.includes('localhost');
+      console.log("Is app page:", isAppPage);
+      
+      // Add a flag to localStorage to prevent redirect loops
+      const justLoggedIn = localStorage.getItem('justLoggedIn') === 'true';
+      
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? "User logged in" : "No user");
         
         if (user) {
           // User is signed in
           console.log("User authenticated:", user.uid);
+          
+          // Clear the login flag if it exists
+          localStorage.removeItem('justLoggedIn');
           
           // Display welcome message with user's email
           document.getElementById("userEmailDisplay").textContent = user.email;
@@ -490,8 +507,8 @@
           
           // Load user data in the background
           loadUserData(user.uid);
-        } else {
-          // User is signed out, redirect to landing page
+        } else if (isAppPage && !justLoggedIn) {
+          // We're on the app page but no user is found
           console.log("No user signed in, redirecting to landing page");
           window.location.href = "https://infoseccompliance.chat";
         }

@@ -526,10 +526,15 @@
     function checkAuthStatus() {
       console.log("Checking auth status...");
       
-      // Check if we're on the app page or landing page
-      const isAppPage = window.location.hostname === 'app.infoseccompliance.chat' || 
-                        window.location.pathname.includes('/app') ||
-                        window.location.hostname.includes('localhost');
+      // Get the current URL to determine if we're on the app page
+      const currentUrl = window.location.href;
+      console.log("Current URL:", currentUrl);
+      
+      // Check if we're already on the app page
+      const isAppPage = currentUrl.includes('app.infoseccompliance.chat') || 
+                        currentUrl.includes('/app') ||
+                        currentUrl.includes('localhost');
+      console.log("Is app page:", isAppPage);
       
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? "User logged in" : "No user");
@@ -537,13 +542,20 @@
         if (user) {
           // User is signed in
           console.log("User authenticated:", user.uid);
-          // Hide login section
+          
+          // If we're on the landing page, redirect to app
+          if (!isAppPage) {
+            console.log("Redirecting to app page");
+            window.location.href = "/app";
+            return;
+          }
+          
+          // Otherwise, show the dashboard
           if (loginSection) loginSection.style.display = 'none';
-          // Load user data and show dashboard
           loadUserData(user.uid);
           showDashboardSection();
         } else if (isAppPage) {
-          // Only redirect if we're on the app page and no user is found
+          // We're on the app page but no user is found
           console.log("No user signed in, showing login form");
           showLoginSection();
         }
@@ -559,17 +571,31 @@
       // Hide any previous error messages
       document.getElementById('loginError').style.display = 'none';
       
+      // Show loading indicator
+      const submitBtn = this.querySelector('button[type="submit"]');
+      const originalBtnText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in...';
+      
       auth.signInWithEmailAndPassword(email, password)
         .then((userCredential) => {
-          // Signed in
+          // Signed in successfully
           const user = userCredential.user;
           console.log("User signed in:", user.uid);
-          // No need to redirect - onAuthStateChanged will handle showing the dashboard
+          
+          // Force page to stay on app
+          if (loginSection) loginSection.style.display = 'none';
+          loadUserData(user.uid);
+          showDashboardSection();
         })
         .catch((error) => {
           console.error("Login error:", error);
           document.getElementById('loginError').textContent = error.message;
           document.getElementById('loginError').style.display = 'block';
+          
+          // Reset button
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalBtnText;
         });
     });
 

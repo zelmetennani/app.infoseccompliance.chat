@@ -497,6 +497,18 @@
       
       // Add a flag to localStorage to prevent redirect loops
       const justLoggedIn = localStorage.getItem('justLoggedIn') === 'true';
+      console.log("Just logged in flag:", justLoggedIn);
+      
+      // Debug: Check all localStorage items
+      console.log("All localStorage items:");
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        console.log(`${key}: ${localStorage.getItem(key)}`);
+      }
+      
+      // Add a manual check for auth token
+      const authToken = localStorage.getItem('authToken');
+      console.log("Auth token exists:", !!authToken);
       
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? "User logged in" : "No user");
@@ -504,6 +516,8 @@
         if (user) {
           // User is signed in
           console.log("User authenticated:", user.uid);
+          console.log("User email:", user.email);
+          console.log("User display name:", user.displayName);
           
           // Clear the login flag if it exists
           localStorage.removeItem('justLoggedIn');
@@ -516,10 +530,26 @@
           
           // Load user data in the background
           loadUserData(user.uid);
-        } else if (isAppPage && !justLoggedIn) {
-          // We're on the app page but no user is found AND we didn't just log in
-          console.log("No user signed in, redirecting to landing page");
-          window.location.href = "https://infoseccompliance.chat";
+        } else {
+          console.log("No user found in auth state");
+          
+          if (isAppPage) {
+            if (justLoggedIn) {
+              console.log("Just logged in, but no user found yet. Waiting...");
+              // Give Firebase auth a moment to initialize
+              setTimeout(() => {
+                const currentUser = auth.currentUser;
+                console.log("After delay, current user:", currentUser);
+                if (!currentUser && isAppPage) {
+                  console.log("Still no user after delay, redirecting to landing page");
+                  window.location.href = "https://infoseccompliance.chat";
+                }
+              }, 3000); // Wait 3 seconds before redirecting
+            } else {
+              console.log("No user signed in and not just logged in, redirecting to landing page");
+              window.location.href = "https://infoseccompliance.chat";
+            }
+          }
         }
       });
     }
@@ -539,6 +569,25 @@
       setupChatFunctionality();
       checkAuthStatus();
     });
+
+    // Add this function for testing
+    function testAuth() {
+      console.log("Testing auth state:");
+      console.log("Current user:", auth.currentUser);
+      console.log("justLoggedIn flag:", localStorage.getItem('justLoggedIn'));
+      console.log("authToken exists:", !!localStorage.getItem('authToken'));
+      
+      if (auth.currentUser) {
+        console.log("User is authenticated!");
+        return true;
+      } else {
+        console.log("User is NOT authenticated!");
+        return false;
+      }
+    }
+
+    // Make it available globally for console testing
+    window.testAuth = testAuth;
   </script>
 </body>
 </html>

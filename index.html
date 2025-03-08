@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InfoSec Compliance Chat</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <style>
     body {
       padding-top: 20px;
@@ -60,6 +65,60 @@
   </style>
 </head>
 <body>
+  <!-- Add this before your existing sections -->
+  <div id="login-section" class="section container">
+    <div class="auth-container">
+      <ul class="nav nav-tabs mb-4" id="authTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-tab-pane" type="button" role="tab" aria-controls="login-tab-pane" aria-selected="true">Login</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register-tab-pane" type="button" role="tab" aria-controls="register-tab-pane" aria-selected="false">Register</button>
+        </li>
+      </ul>
+      
+      <div class="tab-content" id="authTabContent">
+        <!-- Login Tab -->
+        <div class="tab-pane fade show active" id="login-tab-pane" role="tabpanel" aria-labelledby="login-tab" tabindex="0">
+          <form id="loginForm">
+            <div class="mb-3">
+              <label for="loginEmail" class="form-label">Email</label>
+              <input type="email" class="form-control" id="loginEmail" required>
+            </div>
+            <div class="mb-3">
+              <label for="loginPassword" class="form-label">Password</label>
+              <input type="password" class="form-control" id="loginPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Sign In</button>
+          </form>
+          <div id="loginError" class="alert alert-danger mt-3" style="display: none;"></div>
+        </div>
+        
+        <!-- Register Tab -->
+        <div class="tab-pane fade" id="register-tab-pane" role="tabpanel" aria-labelledby="register-tab" tabindex="0">
+          <form id="registerForm">
+            <div class="mb-3">
+              <label for="registerName" class="form-label">Name</label>
+              <input type="text" class="form-control" id="registerName" required>
+            </div>
+            <div class="mb-3">
+              <label for="registerEmail" class="form-label">Email</label>
+              <input type="email" class="form-control" id="registerEmail" required>
+            </div>
+            <div class="mb-3">
+              <label for="registerPassword" class="form-label">Password</label>
+              <input type="password" class="form-control" id="registerPassword" required minlength="6">
+              <div class="form-text">Password must be at least 6 characters</div>
+            </div>
+            <button type="submit" class="btn btn-success w-100">Create Account</button>
+          </form>
+          <div id="registerError" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="registerSuccess" class="alert alert-success mt-3" style="display: none;">Account created! You can now log in.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Dashboard Section -->
   <div id="dashboard-section" class="section container">
     <h1>Welcome to Your Dashboard</h1>
@@ -143,13 +202,8 @@
     </div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-firestore.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-  
   <script>
-    // Initialize Firebase (add your firebaseConfig object here)
+    // Initialize Firebase
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_AUTH_DOMAIN",
@@ -158,34 +212,16 @@
       messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
       appId: "YOUR_APP_ID"
     };
+    
     firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
     // DOM elements
     const dashboardSection = document.getElementById('dashboard-section');
     const chatSection = document.getElementById('chat-section');
+    const loginSection = document.getElementById('login-section');
     
-    // Check Auth Status and Retrieve Data
-    function checkAuthStatus() {
-      const token = localStorage.getItem("authToken");
-
-      if (!token) {
-        // Redirect to landing page if no token
-        window.location.href = "https://infoseccompliance.chat";
-        return;
-      }
-
-      firebase.auth().verifyIdToken(token).then((decodedToken) => {
-        const uid = decodedToken.uid;
-        console.log("User authenticated:", uid);
-        loadUserData(uid); // Load user data from Firestore
-        showDashboardSection(); // Show the dashboard by default
-      }).catch((error) => {
-        console.error("Token verification failed:", error);
-        // Redirect to landing page on auth error
-        window.location.href = "https://infoseccompliance.chat";
-      });
-    }
-
     // Show/hide different sections of the app
     function showDashboardSection() {
       dashboardSection.style.display = 'block';
@@ -199,27 +235,26 @@
 
     // Fetch user data from Firestore
     function loadUserData(uid) {
-      const db = firebase.firestore();
-      db.collection('users').doc(uid).get().then((doc) => {
-        if (doc.exists) {
-          const userData = doc.data();
-          console.log("User data:", userData);
-          displayUserData(userData);
-          loadConversationHistory(uid);
-        } else {
-          console.error("No user data found");
-          // Create a new user profile if none exists
-          createNewUserProfile(uid);
-        }
-      }).catch((error) => {
-        console.error("Error fetching user data:", error);
-      });
+      db.collection('users').doc(uid).get()
+        .then((doc) => {
+          if (doc.exists) {
+            const userData = doc.data();
+            console.log("User data:", userData);
+            displayUserData(userData);
+            loadConversationHistory(uid);
+          } else {
+            console.log("No user data found");
+            createNewUserProfile(uid);
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching user data:", error);
+        });
     }
 
     // Create a new user profile in Firestore
     function createNewUserProfile(uid) {
-      const user = firebase.auth().currentUser;
-      const db = firebase.firestore();
+      const user = auth.currentUser;
       
       const userData = {
         uid: uid,
@@ -249,18 +284,15 @@
       document.getElementById("userEmail").textContent = userData.email || '';
       document.getElementById("userStatus").textContent = userData.status || 'active';
       
-      // Also update the chat interface with user info
       document.getElementById("chatUserName").textContent = userData.name || 'User';
       document.getElementById("chatUserEmail").textContent = userData.email || '';
     }
 
     // Load conversation history
     function loadConversationHistory(uid) {
-      const db = firebase.firestore();
       const conversationHistoryDiv = document.getElementById('conversationHistory');
       const recentChatsDiv = document.getElementById('recentChats');
       
-      // Clear existing content
       conversationHistoryDiv.innerHTML = '';
       recentChatsDiv.innerHTML = '';
       
@@ -323,13 +355,8 @@
 
     // Load a specific conversation
     function loadConversation(conversationId) {
-      const db = firebase.firestore();
       const chatMessages = document.getElementById('chatMessages');
-      
-      // Clear existing messages
       chatMessages.innerHTML = '';
-      
-      // Show chat section
       showChatSection();
       
       db.collection('conversations').doc(conversationId)
@@ -342,7 +369,7 @@
             addMessage(message.text, message.sender, false);
           });
           
-          // Scroll to bottom
+          localStorage.setItem('activeConversation', conversationId);
           chatMessages.scrollTop = chatMessages.scrollHeight;
         })
         .catch((error) => {
@@ -353,9 +380,9 @@
 
     // Sign Out function
     function signOut() {
-      firebase.auth().signOut().then(() => {
-        localStorage.removeItem("authToken");
-        window.location.href = "https://infoseccompliance.chat"; // Redirect to the landing page
+      auth.signOut().then(() => {
+        localStorage.removeItem("activeConversation");
+        window.location.href = "https://infoseccompliance.chat";
       }).catch((error) => {
         console.error("Sign Out Error:", error.message);
       });
@@ -371,13 +398,9 @@
         
         const message = messageInput.value.trim();
         if (message) {
-          // Add user message to chat
           addMessage(message, 'user', true);
-          
-          // Clear input
           messageInput.value = '';
           
-          // Simulate AI response (replace with actual API call)
           setTimeout(() => {
             const aiResponse = "Thank you for your question about InfoSec compliance. This is a simulated response. In a real application, this would be connected to an AI backend or API.";
             addMessage(aiResponse, 'ai', true);
@@ -400,21 +423,16 @@
       messageDiv.appendChild(messagePara);
       chatMessages.appendChild(messageDiv);
       
-      // Scroll to bottom
       chatMessages.scrollTop = chatMessages.scrollHeight;
       
-      // If this is a real app, you would also save the message to Firestore here
-      if (save && firebase.auth().currentUser) {
+      if (save && auth.currentUser) {
         saveMessageToFirestore(text, sender);
       }
     }
 
     // Save message to Firestore
     function saveMessageToFirestore(text, sender) {
-      const db = firebase.firestore();
-      const uid = firebase.auth().currentUser.uid;
-      
-      // Get active conversation or create a new one
+      const uid = auth.currentUser.uid;
       let conversationId = localStorage.getItem('activeConversation');
       
       if (!conversationId) {
@@ -443,21 +461,17 @@
 
     // Save individual message
     function saveMessage(conversationId, text, sender) {
-      const db = firebase.firestore();
-      
       const messageData = {
         text: text,
         sender: sender,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       };
       
-      // Add message to conversation
       db.collection('conversations').doc(conversationId)
         .collection('messages').add(messageData)
         .then(() => {
           console.log("Message saved");
           
-          // Update conversation preview and timestamp
           db.collection('conversations').doc(conversationId).update({
             preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
@@ -470,39 +484,139 @@
 
     // Start a new conversation
     function startNewConversation() {
-      // Clear active conversation
       localStorage.removeItem('activeConversation');
       
-      // Clear chat messages
       const chatMessages = document.getElementById('chatMessages');
       chatMessages.innerHTML = '';
       
-      // Add welcome message
       addMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'ai', false);
       
-      // Show chat section
       showChatSection();
     }
 
     // Event listeners
     document.addEventListener('DOMContentLoaded', function() {
-      // Setup logout button
       const logoutBtn = document.getElementById('logoutBtn');
       if (logoutBtn) {
         logoutBtn.addEventListener('click', signOut);
       }
       
-      // Setup new chat button
       const newChatBtn = document.querySelector('.btn-primary[onclick="showChatSection()"]');
       if (newChatBtn) {
         newChatBtn.addEventListener('click', startNewConversation);
       }
       
-      // Setup chat functionality
       setupChatFunctionality();
-      
-      // Check auth status on page load
       checkAuthStatus();
+    });
+
+    // Show login form if no user
+    function showLoginSection() {
+      document.getElementById('login-section').style.display = 'block';
+      dashboardSection.style.display = 'none';
+      chatSection.style.display = 'none';
+    }
+
+    // Check Auth Status and Retrieve Data
+    function checkAuthStatus() {
+      console.log("Checking auth status...");
+      
+      auth.onAuthStateChanged((user) => {
+        console.log("Auth state changed:", user ? "User logged in" : "No user");
+        
+        if (user) {
+          // User is signed in
+          console.log("User authenticated:", user.uid);
+          // Hide login section
+          loginSection.style.display = 'none';
+          // Load user data and show dashboard
+          loadUserData(user.uid);
+          showDashboardSection();
+        } else {
+          // User is signed out, redirect to landing page
+          console.log("No user signed in, redirecting to landing page");
+          window.location.href = "https://infoseccompliance.chat";
+        }
+      });
+    }
+
+    // Add login form handler
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      // Hide any previous error messages
+      document.getElementById('loginError').style.display = 'none';
+      
+      auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          // Signed in
+          const user = userCredential.user;
+          console.log("User signed in:", user.uid);
+        })
+        .catch((error) => {
+          console.error("Login error:", error);
+          document.getElementById('loginError').textContent = error.message;
+          document.getElementById('loginError').style.display = 'block';
+        });
+    });
+
+    // Add registration form handler
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('registerName').value;
+      const email = document.getElementById('registerEmail').value;
+      const password = document.getElementById('registerPassword').value;
+      
+      // Hide any previous error messages
+      document.getElementById('registerError').style.display = 'none';
+      document.getElementById('registerSuccess').style.display = 'none';
+      
+      // Create user with email and password
+      auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          // User created successfully
+          const user = userCredential.user;
+          console.log("User registered:", user.uid);
+          
+          // Update user profile with name
+          return user.updateProfile({
+            displayName: name
+          }).then(() => {
+            // Create user document in Firestore
+            return db.collection('users').doc(user.uid).set({
+              uid: user.uid,
+              email: email,
+              name: name,
+              status: 'active',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              preferences: {
+                theme: 'light',
+                notifications: true
+              }
+            });
+          });
+        })
+        .then(() => {
+          // Show success message
+          document.getElementById('registerSuccess').textContent = 'Account created successfully! You can now log in.';
+          document.getElementById('registerSuccess').style.display = 'block';
+          
+          // Reset form
+          document.getElementById('registerForm').reset();
+          
+          // Switch to login tab after a short delay
+          setTimeout(() => {
+            document.getElementById('login-tab').click();
+          }, 2000);
+        })
+        .catch((error) => {
+          console.error("Registration error:", error);
+          document.getElementById('registerError').textContent = error.message;
+          document.getElementById('registerError').style.display = 'block';
+        });
     });
   </script>
 </body>

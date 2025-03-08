@@ -167,28 +167,80 @@
   </div>
 
   <script>
-    // Initialize Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyALZWouXQCdO49GYYA5NTaeESVDcBHmZGs",
-      authDomain: "infoseccompliance-chat.firebaseapp.com",
-      projectId: "infoseccompliance-chat",
-      storageBucket: "infoseccompliance-chat.appspot.com",
-      messagingSenderId: "85538751648",
-      appId: "1:85538751648:web:f1a594d9b4d7dfaf9775c5"
-    };
-    
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    // Check if Firebase is already initialized
+    let auth, db;
+    try {
+      // Try to get the default app
+      const defaultApp = firebase.app();
+      console.log("Using existing Firebase app");
+      auth = firebase.auth();
+      db = firebase.firestore();
+      
+      // Set persistence to LOCAL
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+        .then(() => {
+          console.log("Auth persistence set to LOCAL");
+        })
+        .catch((error) => {
+          console.error("Error setting auth persistence:", error);
+        });
+    } catch (e) {
+      console.error("Error accessing Firebase app:", e);
+      console.log("Attempting to initialize Firebase from scratch");
+      
+      // If we're in development, we can try to load from environment
+      if (window.location.hostname === 'localhost' || 
+          window.location.hostname === '127.0.0.1') {
+        // Load from environment variables if available
+        fetch('/.env.public')
+          .then(response => response.text())
+          .then(text => {
+            const envVars = {};
+            text.split('\n').forEach(line => {
+              const [key, value] = line.split('=');
+              if (key && value) {
+                envVars[key.trim()] = value.trim();
+              }
+            });
+            
+            initializeFirebase(envVars);
+          })
+          .catch(error => {
+            console.error("Could not load environment variables:", error);
+            // Fallback to redirect to sign-in page
+            window.location.href = "https://infoseccompliance.chat/signin.html";
+          });
+      } else {
+        // In production, redirect to sign-in page
+        console.log("No Firebase app found, redirecting to sign-in page");
+        window.location.href = "https://infoseccompliance.chat/signin.html";
+      }
+    }
 
-    // Add this to ensure persistence
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-      .then(() => {
-        console.log("Auth persistence set to LOCAL");
-      })
-      .catch((error) => {
-        console.error("Error setting auth persistence:", error);
-      });
+    function initializeFirebase(envVars) {
+      // Initialize Firebase with environment variables
+      const firebaseConfig = {
+        apiKey: envVars.FIREBASE_API_KEY,
+        authDomain: envVars.FIREBASE_AUTH_DOMAIN,
+        projectId: envVars.FIREBASE_PROJECT_ID,
+        storageBucket: envVars.FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: envVars.FIREBASE_MESSAGING_SENDER_ID,
+        appId: envVars.FIREBASE_APP_ID
+      };
+      
+      firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+      
+      // Set persistence to LOCAL
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+        .then(() => {
+          console.log("Auth persistence set to LOCAL");
+        })
+        .catch((error) => {
+          console.error("Error setting auth persistence:", error);
+        });
+    }
 
     // DOM elements
     const welcomeSection = document.getElementById('welcome-section');
@@ -510,48 +562,87 @@
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token exists:", !!authToken);
       
-      auth.onAuthStateChanged((user) => {
-        console.log("Auth state changed:", user ? "User logged in" : "No user");
+      // If we just logged in, be more patient with auth state
+      if (justLoggedIn) {
+        console.log("Just logged in, being more patient with auth state...");
         
-        if (user) {
-          // User is signed in
-          console.log("User authenticated:", user.uid);
-          console.log("User email:", user.email);
-          console.log("User display name:", user.displayName);
+        // Try multiple times with increasing delays
+        let attempts = 0;
+        const maxAttempts = 5;
+        const checkInterval = 1000; // 1 second
+        
+        const authCheckInterval = setInterval(() => {
+          attempts++;
+          console.log(`Auth check attempt ${attempts}/${maxAttempts}`);
           
-          // Clear the login flag if it exists
-          localStorage.removeItem('justLoggedIn');
-          
-          // Display welcome message with user's email
-          document.getElementById("userEmailDisplay").textContent = user.email;
-          
-          // Show welcome section first
-          showWelcomeSection();
-          
-          // Load user data in the background
-          loadUserData(user.uid);
-        } else {
-          console.log("No user found in auth state");
-          
-          if (isAppPage) {
-            if (justLoggedIn) {
-              console.log("Just logged in, but no user found yet. Waiting...");
-              // Give Firebase auth a moment to initialize
-              setTimeout(() => {
-                const currentUser = auth.currentUser;
-                console.log("After delay, current user:", currentUser);
-                if (!currentUser && isAppPage) {
-                  console.log("Still no user after delay, redirecting to landing page");
-                  window.location.href = "https://infoseccompliance.chat";
-                }
-              }, 3000); // Wait 3 seconds before redirecting
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            console.log("User found after waiting:", currentUser.uid);
+            clearInterval(authCheckInterval);
+            handleAuthenticatedUser(currentUser);
+          } else if (attempts >= maxAttempts) {
+            console.log("Max attempts reached, still no user");
+            clearInterval(authCheckInterval);
+            
+            // As a last resort, check if we have an email in localStorage
+            const userEmail = localStorage.getItem('userEmail');
+            if (userEmail && authToken) {
+              console.log("No user in auth state, but we have email and token. Proceeding anyway.");
+              document.getElementById("userEmailDisplay").textContent = userEmail;
+              showWelcomeSection();
             } else {
-              console.log("No user signed in and not just logged in, redirecting to landing page");
+              console.log("No authentication found after multiple attempts, redirecting");
               window.location.href = "https://infoseccompliance.chat";
             }
           }
+        }, checkInterval);
+        
+        return;
+      }
+      
+      // For non-just-logged-in cases, check once with a small delay
+      setTimeout(() => {
+        const currentUser = auth.currentUser;
+        console.log("Current user after short delay:", currentUser);
+        
+        if (currentUser) {
+          handleAuthenticatedUser(currentUser);
+        } else {
+          console.log("No user found in auth state");
+          
+          // As a fallback, check if we have an email and token in localStorage
+          const userEmail = localStorage.getItem('userEmail');
+          if (userEmail && authToken) {
+            console.log("No user in auth state, but we have email and token. Proceeding anyway.");
+            document.getElementById("userEmailDisplay").textContent = userEmail;
+            showWelcomeSection();
+          } else if (isAppPage) {
+            console.log("No authentication found, redirecting to landing page");
+            window.location.href = "https://infoseccompliance.chat";
+          }
         }
-      });
+      }, 500);
+      
+      function handleAuthenticatedUser(user) {
+        console.log("Handling authenticated user:", user.uid);
+        console.log("User email:", user.email);
+        console.log("User display name:", user.displayName);
+        
+        // Store email in localStorage for easier access
+        localStorage.setItem('userEmail', user.email);
+        
+        // Clear the login flag if it exists
+        localStorage.removeItem('justLoggedIn');
+        
+        // Display welcome message with user's email
+        document.getElementById("userEmailDisplay").textContent = user.email;
+        
+        // Show welcome section first
+        showWelcomeSection();
+        
+        // Load user data in the background
+        loadUserData(user.uid);
+      }
     }
 
     // Event listeners

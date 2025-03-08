@@ -169,17 +169,26 @@
   <script>
     // Initialize Firebase
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyALZWouXQCdO49GYYA5NTaeESVDcBHmZGs",
+      authDomain: "infoseccompliance-chat.firebaseapp.com",
+      projectId: "infoseccompliance-chat",
+      storageBucket: "infoseccompliance-chat.appspot.com",
+      messagingSenderId: "85538751648",
+      appId: "1:85538751648:web:f1a594d9b4d7dfaf9775c5"
     };
     
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
+
+    // Add this to ensure persistence
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .then(() => {
+        console.log("Auth persistence set to LOCAL");
+      })
+      .catch((error) => {
+        console.error("Error setting auth persistence:", error);
+      });
 
     // DOM elements
     const welcomeSection = document.getElementById('welcome-section');
@@ -508,7 +517,7 @@
           // Load user data in the background
           loadUserData(user.uid);
         } else if (isAppPage && !justLoggedIn) {
-          // We're on the app page but no user is found
+          // We're on the app page but no user is found AND we didn't just log in
           console.log("No user signed in, redirecting to landing page");
           window.location.href = "https://infoseccompliance.chat";
         }

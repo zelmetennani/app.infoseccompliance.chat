@@ -512,14 +512,24 @@
 
     // Show login form if no user
     function showLoginSection() {
-      document.getElementById('login-section').style.display = 'block';
-      dashboardSection.style.display = 'none';
-      chatSection.style.display = 'none';
+      if (loginSection) {
+        loginSection.style.display = 'block';
+        dashboardSection.style.display = 'none';
+        chatSection.style.display = 'none';
+      } else {
+        // If we're on the app page but there's no login section, redirect to landing
+        window.location.href = "https://infoseccompliance.chat";
+      }
     }
 
     // Check Auth Status and Retrieve Data
     function checkAuthStatus() {
       console.log("Checking auth status...");
+      
+      // Check if we're on the app page or landing page
+      const isAppPage = window.location.hostname === 'app.infoseccompliance.chat' || 
+                        window.location.pathname.includes('/app') ||
+                        window.location.hostname.includes('localhost');
       
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? "User logged in" : "No user");
@@ -528,14 +538,14 @@
           // User is signed in
           console.log("User authenticated:", user.uid);
           // Hide login section
-          loginSection.style.display = 'none';
+          if (loginSection) loginSection.style.display = 'none';
           // Load user data and show dashboard
           loadUserData(user.uid);
           showDashboardSection();
-        } else {
-          // User is signed out, redirect to landing page
-          console.log("No user signed in, redirecting to landing page");
-          window.location.href = "https://infoseccompliance.chat";
+        } else if (isAppPage) {
+          // Only redirect if we're on the app page and no user is found
+          console.log("No user signed in, showing login form");
+          showLoginSection();
         }
       });
     }
@@ -554,6 +564,7 @@
           // Signed in
           const user = userCredential.user;
           console.log("User signed in:", user.uid);
+          // No need to redirect - onAuthStateChanged will handle showing the dashboard
         })
         .catch((error) => {
           console.error("Login error:", error);

@@ -217,512 +217,567 @@
 
   <script>
     // Firebase Configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyALZWouXQCdO49GYYA5NTaeESVDcBHmZGs",
-      authDomain: "infoseccompliance-chat.firebaseapp.com",
-      projectId: "infoseccompliance-chat",
-      storageBucket: "infoseccompliance-chat.appspot.com",
-      messagingSenderId: "85538751648",
-      appId: "1:85538751648:web:f1a594d9b4d7dfaf9775c5"
-    };
+    let firebaseConfig = {};
 
-    // Initialize Firebase
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
-    // OpenAI API Configuration
-    const OPENAI_API_KEY = ""; // This should be set securely on your backend
-    const ASSISTANT_ID = "asst_abc123"; // Replace with your actual Assistant ID
-
-    // Global variables
-    let currentUser = null;
-    let currentThreadId = null;
-    let currentConversationId = null;
-
-    // DOM Elements
-    const chatMessages = document.getElementById('chatMessages');
-    const chatForm = document.getElementById('chatForm');
-    const messageInput = document.getElementById('messageInput');
-    const conversationList = document.getElementById('conversationList');
-    const newChatBtn = document.getElementById('newChatBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const userName = document.getElementById('userName');
-    const userEmail = document.getElementById('userEmail');
-    const userProfilePic = document.getElementById('userProfilePic');
-
-    // Check Authentication Status
-    function checkAuthStatus() {
-      auth.onAuthStateChanged((user) => {
-        if (user) {
-          console.log("User is signed in:", user.uid);
-          currentUser = user;
-          updateUserProfile(user);
-          loadUserConversations(user.uid);
-          startNewConversation();
-        } else {
-          console.log("No user signed in, redirecting to login");
-          window.location.href = "https://infoseccompliance.chat/signin.html";
-        }
-      });
-    }
-
-    // Update User Profile in UI
-    function updateUserProfile(user) {
-      if (user) {
-        userName.textContent = user.displayName || 'User';
-        userEmail.textContent = user.email;
-        
-        if (user.photoURL) {
-          userProfilePic.src = user.photoURL;
-        }
-      }
-    }
-
-    // Sign Out
-    function signOut() {
-      auth.signOut()
-        .then(() => {
-          console.log("User signed out");
-          window.location.href = "https://infoseccompliance.chat";
-        })
-        .catch((error) => {
-          console.error("Error signing out:", error);
-        });
-    }
-
-    // Load User's Conversations from Firestore
-    function loadUserConversations(userId) {
-      db.collection('conversations')
-        .where('userId', '==', userId)
-        .orderBy('updatedAt', 'desc')
-        .limit(10)
-        .get()
-        .then((querySnapshot) => {
-          conversationList.innerHTML = '';
-          
-          if (querySnapshot.empty) {
-            console.log("No conversations found");
-            return;
-          }
-          
-          querySnapshot.forEach((doc) => {
-            const conversation = doc.data();
-            const conversationId = doc.id;
+    // Try to load Firebase config from environment
+    function loadFirebaseConfig() {
+      // Check if we're in development mode
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // In development, try to fetch from .env.public
+        fetch('/.env.public')
+          .then(response => response.text())
+          .then(text => {
+            const envVars = {};
+            text.split('\n').forEach(line => {
+              const [key, value] = line.split('=');
+              if (key && value) {
+                envVars[key.trim()] = value.trim();
+              }
+            });
             
-            const conversationItem = document.createElement('a');
-            conversationItem.href = '#';
-            conversationItem.className = 'list-group-item list-group-item-action conversation-item';
-            conversationItem.dataset.id = conversationId;
-            conversationItem.dataset.threadId = conversation.threadId;
+            firebaseConfig = {
+              apiKey: envVars.FIREBASE_API_KEY,
+              authDomain: envVars.FIREBASE_AUTH_DOMAIN,
+              projectId: envVars.FIREBASE_PROJECT_ID,
+              storageBucket: envVars.FIREBASE_STORAGE_BUCKET,
+              messagingSenderId: envVars.FIREBASE_MESSAGING_SENDER_ID,
+              appId: envVars.FIREBASE_APP_ID
+            };
             
-            const title = conversation.title || 'New Conversation';
-            const preview = conversation.preview || 'No messages yet';
-            const date = conversation.updatedAt ? new Date(conversation.updatedAt.toDate()).toLocaleDateString() : 'Just now';
-            
-            conversationItem.innerHTML = `
-              <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1">${title}</h6>
-                <small>${date}</small>
-              </div>
-              <small class="text-muted">${preview}</small>
-            `;
-            
-            conversationItem.addEventListener('click', () => loadConversation(conversationId, conversation.threadId));
-            
-            conversationList.appendChild(conversationItem);
+            initializeFirebase();
+          })
+          .catch(error => {
+            console.error("Could not load environment variables:", error);
+            // Try to use existing Firebase instance
+            tryUseExistingFirebase();
           });
-        })
-        .catch((error) => {
-          console.error("Error loading conversations:", error);
-        });
-    }
-
-    // Load a Specific Conversation
-    function loadConversation(conversationId, threadId) {
-      // Update active conversation
-      document.querySelectorAll('.conversation-item').forEach(item => {
-        item.classList.remove('active');
-      });
-      
-      const conversationItem = document.querySelector(`.conversation-item[data-id="${conversationId}"]`);
-      if (conversationItem) {
-        conversationItem.classList.add('active');
-      }
-      
-      currentConversationId = conversationId;
-      currentThreadId = threadId;
-      
-      // Clear chat messages
-      chatMessages.innerHTML = '';
-      
-      // Load messages from Firestore
-      db.collection('conversations').doc(conversationId)
-        .collection('messages')
-        .orderBy('timestamp')
-        .get()
-        .then((querySnapshot) => {
-          querySnapshot.forEach((doc) => {
-            const message = doc.data();
-            addMessageToUI(message.text, message.sender);
-          });
-          
-          // Scroll to bottom
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        })
-        .catch((error) => {
-          console.error("Error loading messages:", error);
-        });
-    }
-
-    // Start a New Conversation
-    function startNewConversation() {
-      // Clear current conversation
-      currentConversationId = null;
-      currentThreadId = null;
-      
-      // Clear chat messages
-      chatMessages.innerHTML = '';
-      
-      // Remove active class from conversation items
-      document.querySelectorAll('.conversation-item').forEach(item => {
-        item.classList.remove('active');
-      });
-      
-      // Add welcome message
-      addMessageToUI("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'ai');
-      
-      // Create a new thread in OpenAI
-      createThread()
-        .then(threadId => {
-          currentThreadId = threadId;
-          console.log("New thread created:", threadId);
-        })
-        .catch(error => {
-          console.error("Error creating thread:", error);
-        });
-    }
-
-    // Add Message to UI
-    function addMessageToUI(text, sender) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${sender === 'user' ? 'user-message' : 'ai-message'}`;
-      
-      // Process markdown if it's an AI message
-      if (sender === 'ai') {
-        messageDiv.innerHTML = marked.parse(text);
-        
-        // Apply syntax highlighting to code blocks
-        messageDiv.querySelectorAll('pre code').forEach((block) => {
-          hljs.highlightElement(block);
-        });
       } else {
-        messageDiv.innerHTML = `<p class="mb-0">${text}</p>`;
-      }
-      
-      chatMessages.appendChild(messageDiv);
-      
-      // Scroll to bottom
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Add Typing Indicator
-    function addTypingIndicator() {
-      const typingDiv = document.createElement('div');
-      typingDiv.className = 'typing-indicator';
-      typingDiv.id = 'typingIndicator';
-      typingDiv.innerHTML = `
-        <span></span>
-        <span></span>
-        <span></span>
-      `;
-      
-      chatMessages.appendChild(typingDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Remove Typing Indicator
-    function removeTypingIndicator() {
-      const typingIndicator = document.getElementById('typingIndicator');
-      if (typingIndicator) {
-        typingIndicator.remove();
+        // In production, try to use existing Firebase instance
+        tryUseExistingFirebase();
       }
     }
 
-    // Save Message to Firestore
-    function saveMessageToFirestore(text, sender) {
-      if (!currentUser) return Promise.reject("No user signed in");
+    // Try to use existing Firebase instance
+    function tryUseExistingFirebase() {
+      try {
+        // Try to get the default app
+        const app = firebase.app();
+        console.log("Using existing Firebase app");
+        initializeApp();
+      } catch (e) {
+        console.error("No Firebase app found and couldn't load config:", e);
+        // Redirect to sign-in page
+        window.location.href = "https://infoseccompliance.chat/signin.html";
+      }
+    }
+
+    // Initialize Firebase with config
+    function initializeFirebase() {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      initializeApp();
+    }
+
+    // Initialize the app after Firebase is ready
+    function initializeApp() {
+      const auth = firebase.auth();
+      const db = firebase.firestore();
       
-      if (!currentConversationId) {
-        // Create a new conversation
-        return db.collection('conversations').add({
-          userId: currentUser.uid,
-          title: generateTitle(text),
-          preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-          threadId: currentThreadId,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        })
-        .then((docRef) => {
-          currentConversationId = docRef.id;
+      // OpenAI API Configuration - should be handled securely through a backend
+      // For now, we'll use a placeholder that will be replaced by your backend service
+      const OPENAI_API_KEY = ""; // This should be set securely on your backend
+      const ASSISTANT_ID = ""; // Replace with your actual Assistant ID through backend
+      
+      // Global variables
+      let currentUser = null;
+      let currentThreadId = null;
+      let currentConversationId = null;
+
+      // DOM Elements
+      const chatMessages = document.getElementById('chatMessages');
+      const chatForm = document.getElementById('chatForm');
+      const messageInput = document.getElementById('messageInput');
+      const conversationList = document.getElementById('conversationList');
+      const newChatBtn = document.getElementById('newChatBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const userName = document.getElementById('userName');
+      const userEmail = document.getElementById('userEmail');
+      const userProfilePic = document.getElementById('userProfilePic');
+
+      // Check Authentication Status
+      function checkAuthStatus() {
+        auth.onAuthStateChanged((user) => {
+          if (user) {
+            console.log("User is signed in:", user.uid);
+            currentUser = user;
+            updateUserProfile(user);
+            loadUserConversations(user.uid);
+            startNewConversation();
+          } else {
+            console.log("No user signed in, redirecting to login");
+            window.location.href = "https://infoseccompliance.chat/signin.html";
+          }
+        });
+      }
+
+      // Update User Profile in UI
+      function updateUserProfile(user) {
+        if (user) {
+          userName.textContent = user.displayName || 'User';
+          userEmail.textContent = user.email;
           
-          // Add conversation to the list
-          loadUserConversations(currentUser.uid);
+          if (user.photoURL) {
+            userProfilePic.src = user.photoURL;
+          }
+        }
+      }
+
+      // Sign Out
+      function signOut() {
+        auth.signOut()
+          .then(() => {
+            console.log("User signed out");
+            window.location.href = "https://infoseccompliance.chat";
+          })
+          .catch((error) => {
+            console.error("Error signing out:", error);
+          });
+      }
+
+      // Load User's Conversations from Firestore
+      function loadUserConversations(userId) {
+        db.collection('conversations')
+          .where('userId', '==', userId)
+          .orderBy('updatedAt', 'desc')
+          .limit(10)
+          .get()
+          .then((querySnapshot) => {
+            conversationList.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+              console.log("No conversations found");
+              return;
+            }
+            
+            querySnapshot.forEach((doc) => {
+              const conversation = doc.data();
+              const conversationId = doc.id;
+              
+              const conversationItem = document.createElement('a');
+              conversationItem.href = '#';
+              conversationItem.className = 'list-group-item list-group-item-action conversation-item';
+              conversationItem.dataset.id = conversationId;
+              conversationItem.dataset.threadId = conversation.threadId;
+              
+              const title = conversation.title || 'New Conversation';
+              const preview = conversation.preview || 'No messages yet';
+              const date = conversation.updatedAt ? new Date(conversation.updatedAt.toDate()).toLocaleDateString() : 'Just now';
+              
+              conversationItem.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">${title}</h6>
+                  <small>${date}</small>
+                </div>
+                <small class="text-muted">${preview}</small>
+              `;
+              
+              conversationItem.addEventListener('click', () => loadConversation(conversationId, conversation.threadId));
+              
+              conversationList.appendChild(conversationItem);
+            });
+          })
+          .catch((error) => {
+            console.error("Error loading conversations:", error);
+          });
+      }
+
+      // Load a Specific Conversation
+      function loadConversation(conversationId, threadId) {
+        // Update active conversation
+        document.querySelectorAll('.conversation-item').forEach(item => {
+          item.classList.remove('active');
+        });
+        
+        const conversationItem = document.querySelector(`.conversation-item[data-id="${conversationId}"]`);
+        if (conversationItem) {
+          conversationItem.classList.add('active');
+        }
+        
+        currentConversationId = conversationId;
+        currentThreadId = threadId;
+        
+        // Clear chat messages
+        chatMessages.innerHTML = '';
+        
+        // Load messages from Firestore
+        db.collection('conversations').doc(conversationId)
+          .collection('messages')
+          .orderBy('timestamp')
+          .get()
+          .then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+              const message = doc.data();
+              addMessageToUI(message.text, message.sender);
+            });
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          })
+          .catch((error) => {
+            console.error("Error loading messages:", error);
+          });
+      }
+
+      // Start a New Conversation
+      function startNewConversation() {
+        // Clear current conversation
+        currentConversationId = null;
+        currentThreadId = null;
+        
+        // Clear chat messages
+        chatMessages.innerHTML = '';
+        
+        // Remove active class from conversation items
+        document.querySelectorAll('.conversation-item').forEach(item => {
+          item.classList.remove('active');
+        });
+        
+        // Add welcome message
+        addMessageToUI("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'ai');
+        
+        // Create a new thread in OpenAI
+        createThread()
+          .then(threadId => {
+            currentThreadId = threadId;
+            console.log("New thread created:", threadId);
+          })
+          .catch(error => {
+            console.error("Error creating thread:", error);
+          });
+      }
+
+      // Add Message to UI
+      function addMessageToUI(text, sender) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender === 'user' ? 'user-message' : 'ai-message'}`;
+        
+        // Process markdown if it's an AI message
+        if (sender === 'ai') {
+          messageDiv.innerHTML = marked.parse(text);
+          
+          // Apply syntax highlighting to code blocks
+          messageDiv.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+          });
+        } else {
+          messageDiv.innerHTML = `<p class="mb-0">${text}</p>`;
+        }
+        
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      // Add Typing Indicator
+      function addTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'typing-indicator';
+        typingDiv.id = 'typingIndicator';
+        typingDiv.innerHTML = `
+          <span></span>
+          <span></span>
+          <span></span>
+        `;
+        
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      // Remove Typing Indicator
+      function removeTypingIndicator() {
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) {
+          typingIndicator.remove();
+        }
+      }
+
+      // Save Message to Firestore
+      function saveMessageToFirestore(text, sender) {
+        if (!currentUser) return Promise.reject("No user signed in");
+        
+        if (!currentConversationId) {
+          // Create a new conversation
+          return db.collection('conversations').add({
+            userId: currentUser.uid,
+            title: generateTitle(text),
+            preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+            threadId: currentThreadId,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          })
+          .then((docRef) => {
+            currentConversationId = docRef.id;
+            
+            // Add conversation to the list
+            loadUserConversations(currentUser.uid);
+            
+            // Save the message
+            return saveMessage(currentConversationId, text, sender);
+          });
+        } else {
+          // Update existing conversation
+          db.collection('conversations').doc(currentConversationId).update({
+            preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
           
           // Save the message
           return saveMessage(currentConversationId, text, sender);
-        });
-      } else {
-        // Update existing conversation
-        db.collection('conversations').doc(currentConversationId).update({
-          preview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Save the message
-        return saveMessage(currentConversationId, text, sender);
-      }
-    }
-
-    // Save Individual Message
-    function saveMessage(conversationId, text, sender) {
-      return db.collection('conversations').doc(conversationId)
-        .collection('messages').add({
-          text: text,
-          sender: sender,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    }
-
-    // Generate a Title for the Conversation
-    function generateTitle(text) {
-      // Simple title generation - take first few words
-      const words = text.split(' ');
-      const titleWords = words.slice(0, 5);
-      return titleWords.join(' ') + (words.length > 5 ? '...' : '');
-    }
-
-    // OpenAI API Functions
-    
-    // Create a new thread
-    async function createThread() {
-      try {
-        const response = await fetch('https://api.openai.com/v1/threads', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'assistants=v1'
-          },
-          body: JSON.stringify({})
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
         }
-        
-        const data = await response.json();
-        return data.id;
-      } catch (error) {
-        console.error("Error creating thread:", error);
-        throw error;
       }
-    }
 
-    // Add a message to a thread
-    async function addMessageToThread(threadId, content) {
-      try {
-        const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'assistants=v1'
-          },
-          body: JSON.stringify({
-            role: 'user',
-            content: content
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        return await response.json();
-      } catch (error) {
-        console.error("Error adding message to thread:", error);
-        throw error;
+      // Save Individual Message
+      function saveMessage(conversationId, text, sender) {
+        return db.collection('conversations').doc(conversationId)
+          .collection('messages').add({
+            text: text,
+            sender: sender,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
       }
-    }
 
-    // Run the assistant on a thread
-    async function runAssistant(threadId) {
-      try {
-        const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'assistants=v1'
-          },
-          body: JSON.stringify({
-            assistant_id: ASSISTANT_ID
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        return await response.json();
-      } catch (error) {
-        console.error("Error running assistant:", error);
-        throw error;
+      // Generate a Title for the Conversation
+      function generateTitle(text) {
+        // Simple title generation - take first few words
+        const words = text.split(' ');
+        const titleWords = words.slice(0, 5);
+        return titleWords.join(' ') + (words.length > 5 ? '...' : '');
       }
-    }
 
-    // Check the status of a run
-    async function checkRunStatus(threadId, runId) {
-      try {
-        const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'assistants=v1'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        return await response.json();
-      } catch (error) {
-        console.error("Error checking run status:", error);
-        throw error;
-      }
-    }
-
-    // Get messages from a thread
-    async function getMessages(threadId) {
-      try {
-        const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'assistants=v1'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        return await response.json();
-      } catch (error) {
-        console.error("Error getting messages:", error);
-        throw error;
-      }
-    }
-
-    // Process a user message
-    async function processUserMessage(message) {
-      try {
-        if (!currentThreadId) {
-          currentThreadId = await createThread();
-        }
-        
-        // Add message to UI
-        addMessageToUI(message, 'user');
-        
-        // Save message to Firestore
-        await saveMessageToFirestore(message, 'user');
-        
-        // Add typing indicator
-        addTypingIndicator();
-        
-        // Add message to thread
-        await addMessageToThread(currentThreadId, message);
-        
-        // Run the assistant
-        const run = await runAssistant(currentThreadId);
-        
-        // Poll for completion
-        await pollRunStatus(currentThreadId, run.id);
-        
-      } catch (error) {
-        console.error("Error processing message:", error);
-        removeTypingIndicator();
-        addMessageToUI("I'm sorry, there was an error processing your request. Please try again later.", 'ai');
-      }
-    }
-
-    // Poll for run completion
-    async function pollRunStatus(threadId, runId) {
-      const checkStatus = async () => {
-        const runStatus = await checkRunStatus(threadId, runId);
-        
-        if (runStatus.status === 'completed') {
-          // Get the assistant's response
-          const messagesResponse = await getMessages(threadId);
-          const assistantMessage = messagesResponse.data.find(msg => 
-            msg.role === 'assistant' && msg.run_id === runId
-          );
+      // OpenAI API Functions
+      
+      // Create a new thread
+      async function createThread() {
+        try {
+          const response = await fetch('https://api.openai.com/v1/threads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'OpenAI-Beta': 'assistants=v1'
+            },
+            body: JSON.stringify({})
+          });
           
-          if (assistantMessage) {
-            // Remove typing indicator
-            removeTypingIndicator();
-            
-            // Extract text content
-            const messageContent = assistantMessage.content[0].text.value;
-            
-            // Add message to UI
-            addMessageToUI(messageContent, 'ai');
-            
-            // Save message to Firestore
-            await saveMessageToFirestore(messageContent, 'ai');
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
           }
-        } else if (runStatus.status === 'failed' || runStatus.status === 'cancelled') {
+          
+          const data = await response.json();
+          return data.id;
+        } catch (error) {
+          console.error("Error creating thread:", error);
+          throw error;
+        }
+      }
+
+      // Add a message to a thread
+      async function addMessageToThread(threadId, content) {
+        try {
+          const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'OpenAI-Beta': 'assistants=v1'
+            },
+            body: JSON.stringify({
+              role: 'user',
+              content: content
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          return await response.json();
+        } catch (error) {
+          console.error("Error adding message to thread:", error);
+          throw error;
+        }
+      }
+
+      // Run the assistant on a thread
+      async function runAssistant(threadId) {
+        try {
+          const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'OpenAI-Beta': 'assistants=v1'
+            },
+            body: JSON.stringify({
+              assistant_id: ASSISTANT_ID
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          return await response.json();
+        } catch (error) {
+          console.error("Error running assistant:", error);
+          throw error;
+        }
+      }
+
+      // Check the status of a run
+      async function checkRunStatus(threadId, runId) {
+        try {
+          const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'OpenAI-Beta': 'assistants=v1'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          return await response.json();
+        } catch (error) {
+          console.error("Error checking run status:", error);
+          throw error;
+        }
+      }
+
+      // Get messages from a thread
+      async function getMessages(threadId) {
+        try {
+          const response = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'OpenAI-Beta': 'assistants=v1'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          return await response.json();
+        } catch (error) {
+          console.error("Error getting messages:", error);
+          throw error;
+        }
+      }
+
+      // Process a user message
+      async function processUserMessage(message) {
+        try {
+          if (!currentThreadId) {
+            currentThreadId = await createThread();
+          }
+          
+          // Add message to UI
+          addMessageToUI(message, 'user');
+          
+          // Save message to Firestore
+          await saveMessageToFirestore(message, 'user');
+          
+          // Add typing indicator
+          addTypingIndicator();
+          
+          // Add message to thread
+          await addMessageToThread(currentThreadId, message);
+          
+          // Run the assistant
+          const run = await runAssistant(currentThreadId);
+          
+          // Poll for completion
+          await pollRunStatus(currentThreadId, run.id);
+          
+        } catch (error) {
+          console.error("Error processing message:", error);
           removeTypingIndicator();
           addMessageToUI("I'm sorry, there was an error processing your request. Please try again later.", 'ai');
-        } else {
-          // Still running, check again after a delay
-          setTimeout(checkStatus, 1000);
         }
-      };
-      
-      await checkStatus();
+      }
+
+      // Poll for run completion
+      async function pollRunStatus(threadId, runId) {
+        const checkStatus = async () => {
+          const runStatus = await checkRunStatus(threadId, runId);
+          
+          if (runStatus.status === 'completed') {
+            // Get the assistant's response
+            const messagesResponse = await getMessages(threadId);
+            const assistantMessage = messagesResponse.data.find(msg => 
+              msg.role === 'assistant' && msg.run_id === runId
+            );
+            
+            if (assistantMessage) {
+              // Remove typing indicator
+              removeTypingIndicator();
+              
+              // Extract text content
+              const messageContent = assistantMessage.content[0].text.value;
+              
+              // Add message to UI
+              addMessageToUI(messageContent, 'ai');
+              
+              // Save message to Firestore
+              await saveMessageToFirestore(messageContent, 'ai');
+            }
+          } else if (runStatus.status === 'failed' || runStatus.status === 'cancelled') {
+            removeTypingIndicator();
+            addMessageToUI("I'm sorry, there was an error processing your request. Please try again later.", 'ai');
+          } else {
+            // Still running, check again after a delay
+            setTimeout(checkStatus, 1000);
+          }
+        };
+        
+        await checkStatus();
+      }
+
+      // Event Listeners
+      document.addEventListener('DOMContentLoaded', function() {
+        // Check if user is authenticated
+        checkAuthStatus();
+        
+        // Chat form submission
+        chatForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const message = messageInput.value.trim();
+          if (message) {
+            processUserMessage(message);
+            messageInput.value = '';
+          }
+        });
+        
+        // New chat button
+        newChatBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          startNewConversation();
+        });
+        
+        // Logout button
+        logoutBtn.addEventListener('click', signOut);
+      });
     }
 
-    // Event Listeners
-    document.addEventListener('DOMContentLoaded', function() {
-      // Check if user is authenticated
-      checkAuthStatus();
-      
-      // Chat form submission
-      chatForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const message = messageInput.value.trim();
-        if (message) {
-          processUserMessage(message);
-          messageInput.value = '';
-        }
-      });
-      
-      // New chat button
-      newChatBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        startNewConversation();
-      });
-      
-      // Logout button
-      logoutBtn.addEventListener('click', signOut);
-    });
+    // Call this function to start loading Firebase config
+    loadFirebaseConfig();
   </script>
 </body>
 </html>

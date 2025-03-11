@@ -1,0 +1,13 @@
+{
+  "name": "infosec-compliance-chat",
+  "version": "1.0.0",
+  "description": "InfoSec Compliance Chat Application",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'No build step required for static site'"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "author": "",
+  "license": "MIT"
+} 

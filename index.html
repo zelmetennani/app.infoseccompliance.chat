@@ -858,20 +858,59 @@
             })
             .catch(error => {
               console.error("Error signing in with token from URL fragment:", error);
+              console.log("Token details for debugging:", {
+                length: token.length,
+                firstChars: token.substring(0, 10) + "...",
+                lastChars: "..." + token.substring(token.length - 10)
+              });
               
-              // Try alternative method if the first one fails
-              firebase.auth().signInWithCustomToken(token)
-                .then(userCredential => {
-                  console.log("Successfully signed in with custom token from URL fragment");
-                  updateUserProfile(userCredential.user);
-                  loadUserConversations(userCredential.user.uid);
-                  startNewConversation();
-                })
-                .catch(secondError => {
-                  console.error("Both sign-in methods failed:", secondError);
-                  // Fall back to normal validation
-                  validateAndUseToken();
-                });
+              // Show debug message in UI
+              const chatMessages = document.getElementById('chatMessages');
+              if (chatMessages) {
+                const debugMsg = document.createElement('div');
+                debugMsg.className = 'message ai-message';
+                debugMsg.innerHTML = `
+                  <h4>Authentication Debug</h4>
+                  <p>Error signing in with token. Check console for details.</p>
+                  <p>Waiting 10 seconds before trying alternative method...</p>
+                `;
+                chatMessages.appendChild(debugMsg);
+              }
+              
+              // Try alternative method after a delay
+              console.log("Waiting 10 seconds before trying alternative method...");
+              setTimeout(() => {
+                console.log("Now trying signInWithCustomToken...");
+                firebase.auth().signInWithCustomToken(token)
+                  .then(userCredential => {
+                    console.log("Successfully signed in with custom token from URL fragment");
+                    updateUserProfile(userCredential.user);
+                    loadUserConversations(userCredential.user.uid);
+                    startNewConversation();
+                  })
+                  .catch(secondError => {
+                    console.error("Both sign-in methods failed:", secondError);
+                    
+                    // Show debug message in UI
+                    if (chatMessages) {
+                      const debugMsg = document.createElement('div');
+                      debugMsg.className = 'message ai-message';
+                      debugMsg.innerHTML = `
+                        <h4>Authentication Debug</h4>
+                        <p>Both sign-in methods failed. Check console for details.</p>
+                        <p>Waiting 10 seconds before redirecting to sign-in page...</p>
+                      `;
+                      chatMessages.appendChild(debugMsg);
+                    }
+                    
+                    // Add a delay before redirecting
+                    console.log("Both authentication methods failed. Waiting 10 seconds before redirecting...");
+                    setTimeout(() => {
+                      // Fall back to normal validation
+                      validateAndUseToken();
+                    }, 10000);
+                  });
+              }, 10000);
             });
           
           return true; // Token was found and used
@@ -923,7 +962,7 @@
           console.error("Error decoding token:", e);
         }
         
-        // Try to use the token to authenticate
+        // Modify the error handling in the onAuthStateChanged callback
         firebase.auth().onAuthStateChanged((user) => {
           if (!user) {
             console.log("No user detected, attempting to sign in with token");
@@ -939,8 +978,26 @@
               })
               .catch(error => {
                 console.error("Error signing in with token:", error);
-                localStorage.removeItem('authToken');
-                window.location.href = "https://infoseccompliance.chat/signin.html";
+                
+                // Show debug message in UI
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                  const debugMsg = document.createElement('div');
+                  debugMsg.className = 'message ai-message';
+                  debugMsg.innerHTML = `
+                    <h4>Authentication Debug</h4>
+                    <p>Error signing in with token from localStorage. Check console for details.</p>
+                    <p>Waiting 10 seconds before redirecting to sign-in page...</p>
+                  `;
+                  chatMessages.appendChild(debugMsg);
+                }
+                
+                // Add a delay before redirecting
+                console.log("Authentication failed. Waiting 10 seconds before redirecting...");
+                setTimeout(() => {
+                  localStorage.removeItem('authToken');
+                  window.location.href = "https://infoseccompliance.chat/signin.html";
+                }, 10000);
               });
           } else {
             console.log("User already signed in:", user.uid);

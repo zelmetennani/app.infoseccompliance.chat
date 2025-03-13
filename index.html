@@ -305,6 +305,12 @@
       const userEmail = document.getElementById('userEmail');
       const userProfilePic = document.getElementById('userProfilePic');
 
+      // First check for token in URL fragment, then fall back to localStorage
+      if (!extractAndUseTokenFromUrl()) {
+        // No token in URL, try localStorage
+        validateAndUseToken();
+      }
+
       // Check Authentication Status
       function checkAuthStatus() {
         console.log("Starting auth state check...");
@@ -818,7 +824,49 @@
         logoutBtn.addEventListener('click', signOut);
       });
 
-      // Add this function to your app.infoseccompliance.chat/index.html script
+      // Add this function to extract and use token from URL fragment
+      function extractAndUseTokenFromUrl() {
+        console.log("Checking for token in URL fragment...");
+        
+        // Get the URL fragment
+        const fragment = window.location.hash;
+        
+        if (fragment && fragment.includes('token=')) {
+          // Extract the token
+          const token = fragment.split('token=')[1];
+          console.log("Found token in URL fragment");
+          
+          // Store the token in localStorage for future use
+          localStorage.setItem('authToken', token);
+          localStorage.setItem('tokenTimestamp', new Date().getTime().toString());
+          localStorage.setItem('justLoggedIn', 'true');
+          
+          // Clean up the URL for security (remove token from browser history)
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          // Try to sign in with the token
+          firebase.auth().signInWithCustomToken(token)
+            .then(userCredential => {
+              console.log("Successfully signed in with token from URL fragment");
+              // Update the UI with the user info
+              updateUserProfile(userCredential.user);
+              loadUserConversations(userCredential.user.uid);
+              startNewConversation();
+            })
+            .catch(error => {
+              console.error("Error signing in with token from URL fragment:", error);
+              // Fall back to normal validation
+              validateAndUseToken();
+            });
+          
+          return true; // Token was found and used
+        }
+        
+        console.log("No token found in URL fragment");
+        return false; // No token found
+      }
+
+      // Modify the validateAndUseToken function to check URL first
       function validateAndUseToken() {
         const authToken = localStorage.getItem('authToken');
         const justLoggedIn = localStorage.getItem('justLoggedIn');
@@ -884,9 +932,6 @@
           }
         });
       }
-
-      // Call this function early in your initialization process
-      validateAndUseToken();
     }
 
     // Call this function to start loading Firebase config

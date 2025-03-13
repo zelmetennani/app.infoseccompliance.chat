@@ -844,8 +844,11 @@
           // Clean up the URL for security (remove token from browser history)
           window.history.replaceState({}, document.title, window.location.pathname);
           
-          // Try to sign in with the token
-          firebase.auth().signInWithCustomToken(token)
+          // Create a credential with the ID token
+          const credential = firebase.auth.GoogleAuthProvider.credential(token);
+          
+          // Sign in with credential instead of custom token
+          firebase.auth().signInWithCredential(credential)
             .then(userCredential => {
               console.log("Successfully signed in with token from URL fragment");
               // Update the UI with the user info
@@ -855,8 +858,20 @@
             })
             .catch(error => {
               console.error("Error signing in with token from URL fragment:", error);
-              // Fall back to normal validation
-              validateAndUseToken();
+              
+              // Try alternative method if the first one fails
+              firebase.auth().signInWithCustomToken(token)
+                .then(userCredential => {
+                  console.log("Successfully signed in with custom token from URL fragment");
+                  updateUserProfile(userCredential.user);
+                  loadUserConversations(userCredential.user.uid);
+                  startNewConversation();
+                })
+                .catch(secondError => {
+                  console.error("Both sign-in methods failed:", secondError);
+                  // Fall back to normal validation
+                  validateAndUseToken();
+                });
             });
           
           return true; // Token was found and used

@@ -313,9 +313,15 @@
       const userEmail = document.getElementById('userEmail');
       const userProfilePic = document.getElementById('userProfilePic');
 
-      // Simple auth state listener
+      // Simple auth state listener with loading state
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
+        
+        // Clear any existing loading message
+        const loadingMessage = document.getElementById('auth-loading-message');
+        if (loadingMessage) {
+          loadingMessage.remove();
+        }
         
         if (user) {
           // User is signed in
@@ -329,9 +335,37 @@
             startNewConversation();
           }
         } else {
-          // No user is signed in, redirect to sign-in page
-          console.log("No user signed in, redirecting to signin page");
-          window.location.href = "https://infoseccompliance.chat/signin.html";
+          // Show loading message first
+          const chatMessages = document.getElementById('chatMessages');
+          if (chatMessages) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'auth-loading-message';
+            loadingDiv.className = 'message ai-message';
+            loadingDiv.innerHTML = `
+              <h4>Checking Authentication...</h4>
+              <p>Please wait while we verify your session...</p>
+            `;
+            chatMessages.appendChild(loadingDiv);
+          }
+          
+          // Wait a bit before redirecting to give Firebase time to initialize
+          console.log("No user signed in, waiting before redirecting...");
+          setTimeout(() => {
+            // Check again if user is now authenticated
+            const currentUser = firebase.auth().currentUser;
+            if (!currentUser) {
+              console.log("Still no user after delay, redirecting to signin page");
+              window.location.href = "https://infoseccompliance.chat/signin.html";
+            } else {
+              console.log("User detected after delay:", currentUser.uid);
+              // User is now authenticated, update UI
+              updateUserProfile(currentUser);
+              loadUserConversations(currentUser.uid);
+              if (!currentThreadId) {
+                startNewConversation();
+              }
+            }
+          }, 3000); // 3 second delay
         }
       });
 

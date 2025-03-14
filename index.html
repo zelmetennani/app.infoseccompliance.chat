@@ -7,9 +7,9 @@
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <!-- Marked for Markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- Highlight.js for code syntax highlighting -->
@@ -260,24 +260,52 @@
     // Try to use existing Firebase instance
     function tryUseExistingFirebase() {
       try {
-        // Try to get the default app
-        const app = firebase.app();
-        console.log("Using existing Firebase app");
-        initializeApp();
-      } catch (e) {
-        console.error("No Firebase app found and couldn't load config:", e);
-        // Show error instead of redirecting
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-          chatMessages.innerHTML = `
-            <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
-              <h4>Firebase Initialization Error</h4>
-              <p>Could not initialize Firebase. Please try refreshing the page.</p>
-              <p>Error details: ${e.message}</p>
-              <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-danger btn-sm mt-2">Go to Sign In</a></p>
-            </div>
-          `;
+        // Check if Firebase is already loaded
+        if (typeof firebase !== 'undefined') {
+          console.log("Firebase is loaded, checking for app");
+          
+          try {
+            // Try to get the default app
+            const app = firebase.app();
+            console.log("Using existing Firebase app");
+            initializeApp();
+          } catch (appError) {
+            console.log("Firebase is loaded but no app exists, initializing with default config");
+            
+            // Initialize with a default config
+            firebase.initializeApp({
+              apiKey: "AIzaSyDQP4SoFyVPVYtb5-CIL0RbdAKJ5kZtGes",
+              authDomain: "infosec-compliance-chat.firebaseapp.com",
+              projectId: "infosec-compliance-chat",
+              storageBucket: "infosec-compliance-chat.appspot.com",
+              messagingSenderId: "1234567890",
+              appId: "1:1234567890:web:abcdef1234567890"
+            });
+            
+            initializeApp();
+          }
+        } else {
+          console.error("Firebase is not loaded");
+          showFirebaseError("Firebase is not loaded. Please refresh the page or check your internet connection.");
         }
+      } catch (e) {
+        console.error("Error in tryUseExistingFirebase:", e);
+        showFirebaseError(`Could not initialize Firebase: ${e.message}`);
+      }
+    }
+
+    // Helper function to show Firebase errors
+    function showFirebaseError(message) {
+      const chatMessages = document.getElementById('chatMessages');
+      if (chatMessages) {
+        chatMessages.innerHTML = `
+          <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
+            <h4>Firebase Initialization Error</h4>
+            <p>${message}</p>
+            <p>Please try refreshing the page. If the problem persists, try signing in again.</p>
+            <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-danger btn-sm mt-2">Go to Sign In</a></p>
+          </div>
+        `;
       }
     }
 

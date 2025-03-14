@@ -304,11 +304,10 @@
       // Show initial loading message
       showAuthLoadingMessage("Initializing authentication...");
       
-      // Set persistence early
-      console.log("Setting Firebase persistence to SESSION...");
-      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+      // Set persistence to LOCAL instead of SESSION
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
         .then(() => {
-          console.log("✓ Firebase persistence set to SESSION successfully");
+          console.log("✓ Firebase persistence set to LOCAL successfully");
           // Start the robust auth check process
           checkAuthState();
         })
@@ -318,68 +317,48 @@
           checkAuthState();
         });
       
-      // Robust auth state checking function with delays
+      // Modify the checkAuthState function to be more patient
       function checkAuthState() {
         console.log("Starting robust auth state check...");
         showAuthLoadingMessage("Checking authentication status...");
         
-        // First check - immediate
-        let currentUser = firebase.auth().currentUser;
-        console.log("Initial auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
+        // Check multiple times with increasing delays
+        const checkAttempts = [0, 500, 1000, 2000, 3000, 5000]; // Milliseconds
+        let attemptIndex = 0;
         
-        if (currentUser) {
-          console.log("✓ User authenticated on first check");
-          authCheckInProgress = false;
-          handleAuthenticatedUser(currentUser);
-          return;
-        }
-        
-        // Second check - after a short delay (500ms)
-        console.log("No user found on first check, trying again in 500ms...");
-        setTimeout(() => {
-          currentUser = firebase.auth().currentUser;
-          console.log("Second auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
-          
-          if (currentUser) {
-            console.log("✓ User authenticated on second check");
+        function attemptCheck() {
+          if (attemptIndex >= checkAttempts.length) {
+            // We've tried all attempts, redirect to sign in
+            console.log("✗ No authenticated user found after all attempts");
             authCheckInProgress = false;
-            handleAuthenticatedUser(currentUser);
+            showAuthLoadingMessage("Authentication required. Redirecting to sign-in page...");
+            
+            setTimeout(() => {
+              window.location.href = "https://infoseccompliance.chat/signin.html";
+            }, 1000);
             return;
           }
           
-          // Third check - after a longer delay (2 seconds)
-          console.log("No user found on second check, trying again in 2 seconds...");
-          showAuthLoadingMessage("Still checking authentication... (this may take a moment)");
+          const delay = checkAttempts[attemptIndex];
+          attemptIndex++;
           
           setTimeout(() => {
-            currentUser = firebase.auth().currentUser;
-            console.log("Third auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found after delays");
+            const currentUser = firebase.auth().currentUser;
+            console.log(`Auth check attempt ${attemptIndex}:`, currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
             
             if (currentUser) {
-              console.log("✓ User authenticated on third check");
+              console.log(`✓ User authenticated on attempt ${attemptIndex}`);
               authCheckInProgress = false;
               handleAuthenticatedUser(currentUser);
-              return;
+            } else {
+              // Try next attempt
+              attemptCheck();
             }
-            
-            // Final check - check if Firebase is properly initialized
-            if (firebase.apps.length === 0) {
-              console.error("✗ Firebase not initialized properly");
-              showAuthError("Firebase initialization error", "The authentication service is not properly initialized. Please try refreshing the page.");
-              return;
-            }
-            
-            // No user found after multiple checks
-            console.log("✗ No authenticated user found after multiple checks, redirecting to auth bridge");
-            authCheckInProgress = false;
-            showAuthLoadingMessage("Authentication required. Redirecting...");
-            
-            // Redirect to auth bridge instead of directly to signin
-            setTimeout(() => {
-              window.location.href = "https://infoseccompliance.chat/auth-bridge.html";
-            }, 1000);
-          }, 2000);
-        }, 500);
+          }, delay);
+        }
+        
+        // Start the check attempts
+        attemptCheck();
       }
       
       // Handle authenticated user

@@ -370,13 +370,13 @@
             }
             
             // No user found after multiple checks
-            console.log("✗ No authenticated user found after multiple checks, redirecting to sign-in page");
+            console.log("✗ No authenticated user found after multiple checks, redirecting to auth bridge");
             authCheckInProgress = false;
-            showAuthLoadingMessage("Authentication required. Redirecting to sign-in page...");
+            showAuthLoadingMessage("Authentication required. Redirecting...");
             
-            // Final redirect after a short delay
+            // Redirect to auth bridge instead of directly to signin
             setTimeout(() => {
-              window.location.href = "https://infoseccompliance.chat/signin.html";
+              window.location.href = "https://infoseccompliance.chat/auth-bridge.html";
             }, 1000);
           }, 2000);
         }, 500);

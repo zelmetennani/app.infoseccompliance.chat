@@ -278,8 +278,8 @@
               authDomain: "infosec-compliance-chat.firebaseapp.com",
               projectId: "infosec-compliance-chat",
               storageBucket: "infosec-compliance-chat.appspot.com",
-              messagingSenderId: "1234567890",
-              appId: "1:1234567890:web:abcdef1234567890"
+              messagingSenderId: "123456789012",
+              appId: "1:123456789012:web:abcdef1234567890abcdef"
             });
             
             initializeApp();
@@ -358,6 +358,22 @@
       // Modify the checkAuthState function to only display auth status
       function checkAuthState() {
         console.log("Starting auth state check...");
+        
+        // Check if we're coming from a sign-in
+        const comingFromSignIn = localStorage.getItem('comingFromSignIn');
+        if (comingFromSignIn === 'true') {
+          console.log("Detected sign-in redirect, waiting longer for auth state...");
+          localStorage.removeItem('comingFromSignIn'); // Clear the flag
+          
+          // Show a special message
+          showAuthStatusMessage("Sign-in detected", "Waiting for authentication to complete...", "info");
+          
+          // Use longer delays for auth checks when coming from sign-in
+          checkAuthWithLongerDelays();
+          return;
+        }
+        
+        // Regular auth check code...
         showAuthStatusMessage("Checking authentication status...");
         
         // Check multiple times with increasing delays
@@ -366,7 +382,6 @@
         
         function attemptCheck() {
           if (attemptIndex >= checkAttempts.length) {
-            // We've tried all attempts, just show status
             console.log("No authenticated user found after all attempts");
             authCheckInProgress = false;
             
@@ -384,6 +399,42 @@
             
             if (currentUser) {
               console.log(`User authenticated on attempt ${attemptIndex}`);
+              authCheckInProgress = false;
+              handleAuthenticatedUser(currentUser);
+            } else {
+              // Try next attempt
+              attemptCheck();
+            }
+          }, delay);
+        }
+        
+        // Start the check attempts
+        attemptCheck();
+      }
+      
+      // Add a function for longer delays
+      function checkAuthWithLongerDelays() {
+        // Use longer delays when coming from sign-in
+        const checkAttempts = [0, 1000, 2000, 3000, 5000, 8000]; // Milliseconds
+        let attemptIndex = 0;
+        
+        function attemptCheck() {
+          if (attemptIndex >= checkAttempts.length) {
+            console.log("No authenticated user found after extended attempts");
+            authCheckInProgress = false;
+            showAuthStatusMessage("Authentication failed", "Could not authenticate after sign-in. Please try again.", "error");
+            return;
+          }
+          
+          const delay = checkAttempts[attemptIndex];
+          attemptIndex++;
+          
+          setTimeout(() => {
+            const currentUser = firebase.auth().currentUser;
+            console.log(`Extended auth check attempt ${attemptIndex}:`, currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
+            
+            if (currentUser) {
+              console.log(`User authenticated on extended attempt ${attemptIndex}`);
               authCheckInProgress = false;
               handleAuthenticatedUser(currentUser);
             } else {

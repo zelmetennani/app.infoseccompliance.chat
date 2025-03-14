@@ -251,10 +251,30 @@
               
               // Check for auth state
               auth.onAuthStateChanged((user) => {
+                console.log("--- AUTH STATE CHANGED ---");
+                console.log(`Timestamp: ${new Date().toISOString()}`);
+                console.log(`User object exists: ${user !== null}`);
+                
                 if (user) {
-                  console.log("User is signed in:", user.uid);
-                  console.log("Email:", user.email);
-                  console.log("Display name:", user.displayName);
+                  console.log(`User ID: ${user.uid}`);
+                  console.log(`Email: ${user.email}`);
+                  console.log(`Email verified: ${user.emailVerified}`);
+                  console.log(`Display name: ${user.displayName || 'Not set'}`);
+                  console.log(`Photo URL: ${user.photoURL || 'Not set'}`);
+                  console.log(`Provider ID: ${user.providerId}`);
+                  console.log(`Creation time: ${user.metadata.creationTime}`);
+                  console.log(`Last sign-in time: ${user.metadata.lastSignInTime}`);
+                  
+                  // Check if token is valid
+                  user.getIdToken(true)
+                    .then(token => {
+                      console.log("Successfully retrieved ID token");
+                      console.log(`Token length: ${token.length} characters`);
+                      console.log(`Token starts with: ${token.substring(0, 10)}...`);
+                    })
+                    .catch(error => {
+                      console.error("Error getting ID token:", error);
+                    });
                   
                   // Update UI for authenticated user
                   document.getElementById('userName').textContent = user.displayName || 'User';
@@ -278,7 +298,13 @@
                   // Load user's conversations
                   // This would be implemented later
                 } else {
-                  console.log("No user is signed in");
+                  console.log("No user object found in auth state change");
+                  
+                  // Check cookies and localStorage
+                  const hasCookies = inspectCookies();
+                  const hasLocalStorage = inspectLocalStorage();
+                  
+                  console.log(`Authentication data found: Cookies: ${hasCookies}, LocalStorage: ${hasLocalStorage}`);
                   
                   // Show not authenticated message
                   const chatMessages = document.getElementById('chatMessages');
@@ -288,14 +314,19 @@
                         <h4>Authentication Status</h4>
                         <p><strong>Not authenticated</strong></p>
                         <p>You are not currently signed in.</p>
-                        <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary">Sign In</a></p>
-                        <div style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
+                        <div style="margin-top: 1rem;">
+                          <a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary">Sign In</a>
+                          <button onclick="manualAuthCheck()" class="btn btn-secondary ms-2">Check Auth Again</button>
+                          <button onclick="showDebugInfo()" class="btn btn-info ms-2">Show Debug Info</button>
+                        </div>
+                        <div id="debug-info" style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
                           Debug info: Firebase initialized: ${firebase.apps.length > 0}, Auth state: No user, Time: ${new Date().toISOString()}
                         </div>
                       </div>
                     `;
                   }
                 }
+                console.log("--- END AUTH STATE CHANGED ---");
               });
             })
             .catch(error => {
@@ -354,6 +385,164 @@
         });
       }
     });
+
+    // Add this function to inspect cookies in detail
+    function inspectCookies() {
+      console.log("--- COOKIE INSPECTION ---");
+      const cookies = document.cookie.split(';');
+      console.log(`Total cookies: ${cookies.length}`);
+      
+      cookies.forEach((cookie, index) => {
+        console.log(`Cookie ${index + 1}: ${cookie.trim()}`);
+      });
+      
+      // Look specifically for Firebase auth cookies
+      const firebaseAuthCookies = cookies.filter(cookie => 
+        cookie.trim().startsWith('firebase:') || 
+        cookie.trim().includes('firebaseAuth')
+      );
+      
+      console.log(`Firebase auth cookies found: ${firebaseAuthCookies.length}`);
+      firebaseAuthCookies.forEach((cookie, index) => {
+        console.log(`Firebase cookie ${index + 1}: ${cookie.trim().split('=')[0]}`);
+      });
+      
+      console.log("--- END COOKIE INSPECTION ---");
+      
+      return firebaseAuthCookies.length > 0;
+    }
+
+    // Add this function to inspect localStorage
+    function inspectLocalStorage() {
+      console.log("--- LOCAL STORAGE INSPECTION ---");
+      console.log(`Total items: ${localStorage.length}`);
+      
+      // Look for Firebase-related items
+      const firebaseItems = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.includes('firebase') || key.includes('auth')) {
+          firebaseItems.push(key);
+          console.log(`Firebase item found: ${key}`);
+        }
+      }
+      
+      console.log(`Firebase items found: ${firebaseItems.length}`);
+      console.log("--- END LOCAL STORAGE INSPECTION ---");
+      
+      return firebaseItems.length > 0;
+    }
+
+    // Add these functions for manual checking
+    function manualAuthCheck() {
+      console.log("Manual auth check requested");
+      
+      // Force refresh the auth state
+      const auth = firebase.auth();
+      auth.currentUser?.reload()
+        .then(() => {
+          console.log("User data reloaded");
+          const user = auth.currentUser;
+          
+          if (user) {
+            console.log("User found after reload:", user.uid);
+            // Update UI for authenticated user
+            document.getElementById('userName').textContent = user.displayName || 'User';
+            document.getElementById('userEmail').textContent = user.email;
+            if (user.photoURL) {
+              document.getElementById('userProfilePic').src = user.photoURL;
+            }
+            
+            // Show welcome message
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+              chatMessages.innerHTML = `
+                <div class="message ai-message" style="background-color: #d4edda; color: #155724;">
+                  <h4>Welcome, ${user.displayName || 'User'}!</h4>
+                  <p>You are successfully signed in.</p>
+                  <p>Start a new conversation or continue an existing one.</p>
+                </div>
+              `;
+            }
+          } else {
+            console.log("No user found after reload");
+            showDebugInfo();
+          }
+        })
+        .catch(error => {
+          console.error("Error reloading user data:", error);
+        });
+    }
+
+    function showDebugInfo() {
+      console.log("Showing detailed debug info");
+      
+      // Check cookies and localStorage
+      const hasCookies = inspectCookies();
+      const hasLocalStorage = inspectLocalStorage();
+      
+      // Get Firebase auth state
+      const auth = firebase.auth();
+      const user = auth.currentUser;
+      
+      // Prepare debug info
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        firebaseInitialized: firebase.apps.length > 0,
+        currentUser: user ? {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          emailVerified: user.emailVerified,
+          providerId: user.providerId,
+          lastSignInTime: user.metadata?.lastSignInTime
+        } : null,
+        hasCookies: hasCookies,
+        hasLocalStorage: hasLocalStorage,
+        userAgent: navigator.userAgent,
+        domain: window.location.hostname,
+        referrer: document.referrer
+      };
+      
+      // Display debug info
+      const debugElement = document.getElementById('debug-info');
+      if (debugElement) {
+        debugElement.innerHTML = `
+          <h5>Detailed Debug Info:</h5>
+          <pre>${JSON.stringify(debugInfo, null, 2)}</pre>
+        `;
+      }
+      
+      console.log("Debug info:", debugInfo);
+    }
+
+    // Add this function to check for third-party cookie issues
+    function checkThirdPartyCookieSupport() {
+      console.log("Checking third-party cookie support...");
+      
+      try {
+        // Try to access document.cookie
+        const testCookie = "testCookie=1";
+        document.cookie = testCookie;
+        const cookieEnabled = document.cookie.indexOf(testCookie) !== -1;
+        
+        console.log(`Cookies enabled: ${cookieEnabled}`);
+        
+        if (!cookieEnabled) {
+          console.warn("Cookies are disabled - this will prevent Firebase authentication from working properly");
+          showError("Cookie Issue", "Cookies appear to be disabled in your browser. Firebase authentication requires cookies to work properly.");
+          return false;
+        }
+        
+        return true;
+      } catch (e) {
+        console.error("Error checking cookie support:", e);
+        return false;
+      }
+    }
+
+    // Call this function early
+    checkThirdPartyCookieSupport();
   </script>
 </body>
 </html>

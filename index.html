@@ -216,6 +216,85 @@
   </div>
 
   <script>
+    // Add this function at the top of your script section
+    function parseJwt(token) {
+      try {
+        // Split the token and get the payload
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+
+        return JSON.parse(jsonPayload);
+      } catch (e) {
+        console.error("Error parsing JWT:", e);
+        return null;
+      }
+    }
+
+    // Replace the checkForTokenInUrl function with this simpler version
+    function checkForTokenInUrl() {
+      console.log("Checking for token in URL...");
+      
+      if (window.location.hash && window.location.hash.includes('token=')) {
+        try {
+          // Extract the token
+          const token = decodeURIComponent(window.location.hash.split('token=')[1]);
+          console.log(`Token extracted, length: ${token.length}`);
+          
+          // Clear the token from URL for security
+          window.history.replaceState(null, null, window.location.pathname);
+          
+          // Parse the token to get user info
+          const tokenData = parseJwt(token);
+          if (tokenData) {
+            console.log("Successfully parsed token data:", tokenData);
+            
+            // Create a simple user object from the token data
+            const user = {
+              uid: tokenData.user_id || tokenData.sub,
+              email: tokenData.email,
+              displayName: tokenData.name,
+              emailVerified: tokenData.email_verified || false,
+              // Add other properties as needed
+            };
+            
+            // Update UI with user info
+            document.getElementById('userName').textContent = user.displayName || user.email || 'User';
+            document.getElementById('userEmail').textContent = user.email || user.uid;
+            
+            // Show welcome message
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+              chatMessages.innerHTML = `
+                <div class="message ai-message" style="background-color: #d4edda; color: #155724;">
+                  <h4>Welcome, ${user.displayName || 'User'}!</h4>
+                  <p>You are successfully signed in using token authentication.</p>
+                  <p>User ID: ${user.uid}</p>
+                  <p>Email: ${user.email || 'Not available'}</p>
+                  <p>Start a new conversation or continue an existing one.</p>
+                </div>
+              `;
+            }
+            
+            return true;
+          } else {
+            console.error("Could not parse token data");
+            showError("Token Error", "Could not parse authentication token data.");
+            return false;
+          }
+        } catch (e) {
+          console.error("Error processing token from URL:", e);
+          showError("Token Processing Error", `Could not process authentication token: ${e.message}`);
+          return false;
+        }
+      }
+      
+      console.log("No token found in URL");
+      return false;
+    }
+
     // Firebase Configuration
     function loadFirebaseConfig() {
       console.log("Loading Firebase configuration...");
@@ -550,88 +629,6 @@
 
     // Call this function early
     checkThirdPartyCookieSupport();
-
-    // Update the checkForTokenInUrl function
-    function checkForTokenInUrl() {
-      console.log("Checking for token in URL...");
-      
-      // Check if we have a hash in the URL
-      if (window.location.hash) {
-        console.log(`URL hash found: ${window.location.hash}`);
-        
-        // Check if the hash contains a token
-        if (window.location.hash.includes('token=')) {
-          console.log("Token parameter found in URL hash");
-          
-          try {
-            // Extract the token - handle URL encoding
-            const token = decodeURIComponent(window.location.hash.split('token=')[1]);
-            console.log(`Token extracted, length: ${token.length} characters`);
-            console.log(`Token starts with: ${token.substring(0, 10)}...`);
-            
-            // Clear the token from URL for security
-            window.history.replaceState(null, null, window.location.pathname);
-            console.log("Token cleared from URL");
-            
-            // Try a different approach - use the Firebase Auth REST API
-            console.log("Attempting to sign in with custom token...");
-            
-            return firebase.auth().signInWithCustomToken(token)
-              .then((userCredential) => {
-                console.log("Successfully signed in with custom token");
-                console.log(`User ID: ${userCredential.user.uid}`);
-                return true;
-              })
-              .catch((error) => {
-                console.error("Error signing in with custom token:", error);
-                
-                // Try with ID token
-                console.log("Custom token failed, trying ID token approach...");
-                return signInDirectlyWithIdToken(token);
-              });
-          } catch (e) {
-            console.error("Error processing token from URL:", e);
-            showError("Token Processing Error", `Could not process authentication token: ${e.message}`);
-            return false;
-          }
-        } else {
-          console.log("URL hash does not contain a token parameter");
-        }
-      } else {
-        console.log("No URL hash found");
-      }
-      
-      return false;
-    }
-
-    // Add a function to sign in directly with ID token
-    function signInDirectlyWithIdToken(token) {
-      // This is a workaround since Firebase doesn't have a direct method to sign in with ID token
-      console.log("Attempting direct ID token authentication...");
-      
-      // Create a credential with the token
-      try {
-        // For Firebase Auth
-        const credential = firebase.auth.PhoneAuthProvider.credential(token, 'unused');
-        
-        return firebase.auth().signInWithCredential(credential)
-          .then((userCredential) => {
-            console.log("Successfully signed in with ID token credential");
-            return true;
-          })
-          .catch((error) => {
-            console.error("Error signing in with ID token credential:", error);
-            
-            // Show error on page
-            showError("Authentication Error", 
-              `Could not authenticate with ID token. Error: ${error.message}`);
-            return false;
-          });
-      } catch (e) {
-        console.error("Error creating credential from ID token:", e);
-        return false;
-      }
-    }
 
     // Add this function to check for token in storage
     function checkForTokenInStorage() {

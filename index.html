@@ -360,7 +360,8 @@
 
     // Initialize the app
     document.addEventListener('DOMContentLoaded', function() {
-      console.log("DOM content loaded, starting Firebase initialization");
+      console.log("DOM content loaded, checking for token");
+      checkForTokenInUrl();
       loadFirebaseConfig();
       
       // Set up logout button
@@ -543,6 +544,32 @@
 
     // Call this function early
     checkThirdPartyCookieSupport();
+
+    // Add this function to check for token in URL
+    function checkForTokenInUrl() {
+      console.log("Checking for token in URL...");
+      
+      if (window.location.hash && window.location.hash.includes('token=')) {
+        const token = window.location.hash.split('token=')[1];
+        console.log("Found token in URL");
+        
+        // Clear the token from URL for security
+        window.history.replaceState(null, null, window.location.pathname);
+        
+        // Sign in with the token
+        firebase.auth().signInWithCustomToken(token)
+          .then((userCredential) => {
+            console.log("Successfully signed in with token");
+          })
+          .catch((error) => {
+            console.error("Error signing in with token:", error);
+          });
+        
+        return true;
+      }
+      
+      return false;
+    }
   </script>
 </body>
 </html>

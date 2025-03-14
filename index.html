@@ -284,8 +284,16 @@
       const auth = firebase.auth();
       const db = firebase.firestore();
       
-      // OpenAI API Configuration - should be handled securely through a backend
-      // For now, we'll use a placeholder that will be replaced by your backend service
+      // Set persistence to SESSION
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+        .then(() => {
+          console.log("Firebase persistence set to SESSION");
+        })
+        .catch(error => {
+          console.error("Error setting persistence:", error);
+        });
+      
+      // OpenAI API Configuration
       const OPENAI_API_KEY = ""; // This should be set securely on your backend
       const ASSISTANT_ID = ""; // Replace with your actual Assistant ID through backend
       
@@ -305,70 +313,27 @@
       const userEmail = document.getElementById('userEmail');
       const userProfilePic = document.getElementById('userProfilePic');
 
-      // First check for token in URL fragment, then fall back to localStorage
-      if (!extractAndUseTokenFromUrl()) {
-        // No token in URL, try localStorage
-        validateAndUseToken();
-      }
-
-      // Check Authentication Status
-      function checkAuthStatus() {
-        console.log("Starting auth state check...");
+      // Simple auth state listener
+      auth.onAuthStateChanged((user) => {
+        console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
         
-        // Check for token in localStorage first
-        const authToken = localStorage.getItem('authToken');
-        console.log("Auth token in localStorage:", authToken ? "Present (length: " + authToken.length + ")" : "Not found");
-        
-        // Check for justLoggedIn flag
-        const justLoggedIn = localStorage.getItem('justLoggedIn');
-        console.log("Just logged in flag:", justLoggedIn);
-        
-        // Add a more verbose auth state listener
-        auth.onAuthStateChanged((user) => {
-          console.log("Auth state changed:", user ? `User detected: ${user.uid} (email: ${user.email})` : "No user detected");
+        if (user) {
+          // User is signed in
+          console.log("User is authenticated:", user);
+          currentUser = user;
+          updateUserProfile(user);
+          loadUserConversations(user.uid);
           
-          if (user) {
-            // User is signed in
-            console.log("User is authenticated:", user);
-            currentUser = user;
-            updateUserProfile(user);
-            loadUserConversations(user.uid);
-            
-            // Clear the justLoggedIn flag since we've successfully detected the user
-            if (justLoggedIn) {
-              console.log("Clearing justLoggedIn flag");
-              localStorage.removeItem('justLoggedIn');
-            }
-            
-            // If we don't have a thread yet, start a new conversation
-            if (!currentThreadId) {
-              startNewConversation();
-            }
-          } else {
-            // No user is signed in
-            console.log("No user signed in, checking token...");
-            
-            // If we have a token but no user, try to authenticate with the token
-            if (authToken) {
-              console.log("Found token but no user, attempting to authenticate with token...");
-              
-              // Try to authenticate with the token
-              auth.signInWithCustomToken(authToken)
-                .then(userCredential => {
-                  console.log("Successfully authenticated with token");
-                })
-                .catch(error => {
-                  console.error("Error authenticating with token:", error);
-                  console.log("Token authentication failed, redirecting to signin page");
-                  window.location.href = "https://infoseccompliance.chat/signin.html";
-                });
-            } else {
-              console.log("No token found, redirecting to signin page");
-              window.location.href = "https://infoseccompliance.chat/signin.html";
-            }
+          // If we don't have a thread yet, start a new conversation
+          if (!currentThreadId) {
+            startNewConversation();
           }
-        });
-      }
+        } else {
+          // No user is signed in, redirect to sign-in page
+          console.log("No user signed in, redirecting to signin page");
+          window.location.href = "https://infoseccompliance.chat/signin.html";
+        }
+      });
 
       // Update User Profile in UI
       function updateUserProfile(user) {
@@ -800,9 +765,6 @@
 
       // Event Listeners
       document.addEventListener('DOMContentLoaded', function() {
-        // Check if user is authenticated
-        checkAuthStatus();
-        
         // Chat form submission
         chatForm.addEventListener('submit', function(e) {
           e.preventDefault();
@@ -823,136 +785,6 @@
         // Logout button
         logoutBtn.addEventListener('click', signOut);
       });
-
-      // Simplify the extractAndUseTokenFromUrl function
-      function extractAndUseTokenFromUrl() {
-        console.log("Checking for token in URL fragment...");
-        
-        // Get the URL fragment
-        const fragment = window.location.hash;
-        
-        if (fragment && fragment.includes('token=')) {
-          // Extract the token
-          const token = fragment.split('token=')[1];
-          console.log("Found token in URL fragment, length:", token.length);
-          
-          // Store the token in localStorage for future use
-          localStorage.setItem('authToken', token);
-          
-          // Clean up the URL for security
-          window.history.replaceState({}, document.title, window.location.pathname);
-          
-          // Try to sign in with the token
-          console.log("Attempting to sign in with token from URL fragment");
-          
-          // Try both methods one after another
-          firebase.auth().signInWithCredential(firebase.auth.GoogleAuthProvider.credential(null, token))
-            .catch(error => {
-              console.error("Error with credential method:", error);
-              return firebase.auth().signInWithCustomToken(token);
-            })
-            .then(userCredential => {
-              console.log("Successfully signed in with token");
-              updateUserProfile(userCredential.user);
-              loadUserConversations(userCredential.user.uid);
-              startNewConversation();
-            })
-            .catch(error => {
-              console.error("All sign-in methods failed:", error);
-              validateAndUseToken();
-            });
-          
-          return true; // Token was found and used
-        }
-        
-        console.log("No token found in URL fragment");
-        return false; // No token found
-      }
-
-      // Modify the validateAndUseToken function to check URL first
-      function validateAndUseToken() {
-        const authToken = localStorage.getItem('authToken');
-        const justLoggedIn = localStorage.getItem('justLoggedIn');
-        
-        console.log("Token validation started");
-        console.log("Auth token present:", !!authToken);
-        console.log("Just logged in flag:", justLoggedIn);
-        
-        // Add timestamp debugging
-        const tokenTimestamp = localStorage.getItem('tokenTimestamp');
-        const now = new Date().getTime();
-        if (tokenTimestamp) {
-          const tokenAge = (now - parseInt(tokenTimestamp)) / 1000;
-          console.log(`Token age: ${tokenAge.toFixed(2)} seconds`);
-        }
-        
-        if (!authToken) {
-          console.log("No auth token found, redirecting to signin");
-          window.location.href = "https://infoseccompliance.chat/signin.html";
-          return;
-        }
-        
-        // Decode the token to check expiration (without verification)
-        try {
-          const tokenParts = authToken.split('.');
-          if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            console.log("Token payload:", payload);
-            
-            // Check if token is expired
-            if (payload.exp && payload.exp * 1000 < now) {
-              console.log("Token is expired, redirecting to signin");
-              localStorage.removeItem('authToken');
-              window.location.href = "https://infoseccompliance.chat/signin.html";
-              return;
-            }
-          }
-        } catch (e) {
-          console.error("Error decoding token:", e);
-        }
-        
-        // Modify the error handling in the onAuthStateChanged callback
-        firebase.auth().onAuthStateChanged((user) => {
-          if (!user) {
-            console.log("No user detected, attempting to sign in with token");
-            
-            // Try to sign in with custom token
-            firebase.auth().signInWithCustomToken(authToken)
-              .then(userCredential => {
-                console.log("Successfully signed in with token");
-                // Update the UI with the user info
-                updateUserProfile(userCredential.user);
-                loadUserConversations(userCredential.user.uid);
-                startNewConversation();
-              })
-              .catch(error => {
-                console.error("Error signing in with token:", error);
-                
-                // Show debug message in UI
-                const chatMessages = document.getElementById('chatMessages');
-                if (chatMessages) {
-                  const debugMsg = document.createElement('div');
-                  debugMsg.className = 'message ai-message';
-                  debugMsg.innerHTML = `
-                    <h4>Authentication Debug</h4>
-                    <p>Error signing in with token from localStorage. Check console for details.</p>
-                    <p>Waiting 10 seconds before redirecting to sign-in page...</p>
-                  `;
-                  chatMessages.appendChild(debugMsg);
-                }
-                
-                // Add a delay before redirecting
-                console.log("Authentication failed. Waiting 10 seconds before redirecting...");
-                setTimeout(() => {
-                  localStorage.removeItem('authToken');
-                  window.location.href = "https://infoseccompliance.chat/signin.html";
-                }, 10000);
-              });
-          } else {
-            console.log("User already signed in:", user.uid);
-          }
-        });
-      }
     }
 
     // Call this function to start loading Firebase config

@@ -302,7 +302,7 @@
       const userProfilePic = document.getElementById('userProfilePic');
 
       // Show initial loading message
-      showAuthLoadingMessage("Initializing authentication...");
+      showAuthStatusMessage("Initializing authentication...");
       
       // Set persistence to LOCAL instead of SESSION
       firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
@@ -317,10 +317,10 @@
           checkAuthState();
         });
       
-      // Modify the checkAuthState function to show a login prompt instead of redirecting
+      // Modify the checkAuthState function to only display auth status
       function checkAuthState() {
         console.log("Starting auth state check...");
-        showAuthLoadingMessage("Checking authentication status...");
+        showAuthStatusMessage("Checking authentication status...");
         
         // Check multiple times with increasing delays
         const checkAttempts = [0, 500, 1000, 2000, 3000]; // Milliseconds
@@ -328,12 +328,12 @@
         
         function attemptCheck() {
           if (attemptIndex >= checkAttempts.length) {
-            // We've tried all attempts, show login prompt instead of redirecting
+            // We've tried all attempts, just show status
             console.log("No authenticated user found after all attempts");
             authCheckInProgress = false;
             
-            // Show login prompt
-            showLoginPrompt();
+            // Show unauthenticated status
+            showAuthStatusMessage("Not authenticated", "You are not currently signed in.", "error");
             return;
           }
           
@@ -359,10 +359,56 @@
         attemptCheck();
       }
       
+      // Show auth status message
+      function showAuthStatusMessage(title, message = "", type = "info") {
+        // Remove any existing message
+        const existingMessage = document.getElementById('auth-status-message');
+        if (existingMessage) {
+          existingMessage.remove();
+        }
+        
+        // Add new status message
+        if (chatMessages) {
+          const statusDiv = document.createElement('div');
+          statusDiv.id = 'auth-status-message';
+          statusDiv.className = 'message ai-message';
+          
+          if (type === "error") {
+            statusDiv.style.backgroundColor = '#f8d7da';
+            statusDiv.style.color = '#721c24';
+          } else if (type === "success") {
+            statusDiv.style.backgroundColor = '#d4edda';
+            statusDiv.style.color = '#155724';
+          }
+          
+          statusDiv.innerHTML = `
+            <h4>Authentication Status</h4>
+            <p><strong>${title}</strong></p>
+            ${message ? `<p>${message}</p>` : ''}
+            <div id="auth-debug-info" style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;"></div>
+          `;
+          
+          chatMessages.appendChild(statusDiv);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          
+          // Add debug info
+          const debugInfo = document.getElementById('auth-debug-info');
+          if (debugInfo) {
+            debugInfo.textContent = `Debug info: Firebase initialized: ${firebase.apps.length > 0}, Auth state: ${firebase.auth().currentUser ? 'User found' : 'No user'}, Time: ${new Date().toISOString()}`;
+          }
+        }
+      }
+      
       // Handle authenticated user
       function handleAuthenticatedUser(user) {
         console.log("Handling authenticated user:", user.uid);
-        showAuthLoadingMessage("Authentication successful! Loading your data...");
+        
+        // Show authenticated status
+        showAuthStatusMessage(
+          "Authenticated", 
+          `You are signed in as ${user.email || user.uid}`, 
+          "success"
+        );
         
         // Update UI with user info
         updateUserProfile(user);
@@ -374,69 +420,9 @@
         if (!currentThreadId) {
           startNewConversation();
         }
-        
-        // Clear loading message
-        setTimeout(() => {
-          const loadingMessage = document.getElementById('auth-loading-message');
-          if (loadingMessage) {
-            loadingMessage.remove();
-          }
-        }, 500);
       }
-      
-      // Show auth loading message
-      function showAuthLoadingMessage(message) {
-        // Remove any existing loading message
-        const existingMessage = document.getElementById('auth-loading-message');
-        if (existingMessage) {
-          existingMessage.remove();
-        }
-        
-        // Add new loading message
-        if (chatMessages) {
-          const loadingDiv = document.createElement('div');
-          loadingDiv.id = 'auth-loading-message';
-          loadingDiv.className = 'message ai-message';
-          loadingDiv.innerHTML = `
-            <h4>Authentication Status</h4>
-            <p>${message}</p>
-            <div class="typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          `;
-          chatMessages.appendChild(loadingDiv);
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-      }
-      
-      // Show auth error message
-      function showAuthError(title, message) {
-        // Remove any existing loading message
-        const existingMessage = document.getElementById('auth-loading-message');
-        if (existingMessage) {
-          existingMessage.remove();
-        }
-        
-        // Add error message
-        if (chatMessages) {
-          const errorDiv = document.createElement('div');
-          errorDiv.id = 'auth-error-message';
-          errorDiv.className = 'message ai-message';
-          errorDiv.style.backgroundColor = '#f8d7da';
-          errorDiv.style.color = '#721c24';
-          errorDiv.innerHTML = `
-            <h4>${title}</h4>
-            <p>${message}</p>
-            <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-danger btn-sm mt-2">Go to Sign In</a></p>
-          `;
-          chatMessages.appendChild(errorDiv);
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-      }
-      
-      // Modify the auth state listener to show login prompt instead of redirecting
+
+      // Modify the auth state listener to just update status
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
         
@@ -446,6 +432,12 @@
           
           // Only update UI if auth check is complete
           if (!authCheckInProgress) {
+            showAuthStatusMessage(
+              "Authenticated", 
+              `You are signed in as ${user.email || user.uid}`, 
+              "success"
+            );
+            
             updateUserProfile(user);
             
             // If we don't have conversations loaded yet, load them
@@ -457,27 +449,12 @@
             if (!currentThreadId) {
               startNewConversation();
             }
-            
-            // Enable the UI
-            if (chatForm) {
-              chatForm.style.opacity = '1';
-              chatForm.style.pointerEvents = 'auto';
-            }
-            
-            if (conversationList) {
-              const sidebarElement = conversationList.closest('.sidebar');
-              if (sidebarElement) {
-                sidebarElement.style.opacity = '1';
-                sidebarElement.style.pointerEvents = 'auto';
-              }
-            }
           }
         } else {
           // No user is signed in
-          // Only show login prompt if auth check is complete
           if (!authCheckInProgress) {
-            console.log("Auth state listener confirms no user, showing login prompt");
-            showLoginPrompt();
+            console.log("Auth state listener confirms no user");
+            showAuthStatusMessage("Not authenticated", "You are not currently signed in.", "error");
           } else {
             console.log("Auth state listener found no user, but auth check is still in progress");
           }
@@ -496,15 +473,31 @@
         }
       }
 
-      // Sign Out
+      // Modify sign out to not redirect
       function signOut() {
         auth.signOut()
           .then(() => {
             console.log("User signed out");
-            window.location.href = "https://infoseccompliance.chat";
+            showAuthStatusMessage("Signed Out", "You have been successfully signed out.", "info");
+            
+            // Clear user data from UI
+            if (userName) userName.textContent = '';
+            if (userEmail) userEmail.textContent = '';
+            if (userProfilePic) userProfilePic.src = '';
+            
+            // Clear conversations
+            if (conversationList) conversationList.innerHTML = '';
+            
+            // Clear chat messages
+            if (chatMessages) chatMessages.innerHTML = '';
+            
+            // Reset thread ID
+            currentThreadId = null;
+            currentConversationId = null;
           })
           .catch((error) => {
             console.error("Error signing out:", error);
+            showAuthStatusMessage("Sign Out Error", "There was an error signing out: " + error.message, "error");
           });
       }
 
@@ -910,56 +903,6 @@
         };
         
         await checkStatus();
-      }
-
-      // Add a function to show login prompt
-      function showLoginPrompt() {
-        // Clear the chat area
-        if (chatMessages) {
-          chatMessages.innerHTML = '';
-          
-          // Create login prompt
-          const loginPrompt = document.createElement('div');
-          loginPrompt.className = 'login-prompt';
-          loginPrompt.innerHTML = `
-            <div class="message ai-message" style="text-align: center; padding: 2rem;">
-              <h3>Authentication Required</h3>
-              <p>You need to sign in to use Infosec Compliance Chat.</p>
-              <p>Please sign in with your account credentials.</p>
-              <div style="margin-top: 2rem;">
-                <a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary" style="margin-right: 1rem; padding: 0.5rem 1.5rem; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Sign In</a>
-                <a href="https://infoseccompliance.chat/signup.html" class="btn btn-outline-primary" style="padding: 0.5rem 1.5rem; border: 1px solid #007bff; color: #007bff; text-decoration: none; border-radius: 4px;">Sign Up</a>
-              </div>
-              <div style="margin-top: 2rem; font-size: 0.9rem; color: #6c757d;">
-                <p>Having trouble? <a href="mailto:support@infoseccompliance.chat" style="color: #007bff;">Contact Support</a></p>
-                <p id="auth-debug-info" style="font-size: 0.8rem; color: #6c757d; margin-top: 1rem;"></p>
-              </div>
-            </div>
-          `;
-          
-          chatMessages.appendChild(loginPrompt);
-          
-          // Add debug info
-          const debugInfo = document.getElementById('auth-debug-info');
-          if (debugInfo) {
-            debugInfo.textContent = `Debug info: Firebase initialized: ${firebase.apps.length > 0}, Auth state: ${firebase.auth().currentUser ? 'User found' : 'No user'}, Time: ${new Date().toISOString()}`;
-          }
-        }
-        
-        // Disable the chat form
-        if (chatForm) {
-          chatForm.style.opacity = '0.5';
-          chatForm.style.pointerEvents = 'none';
-        }
-        
-        // Hide the conversation list
-        if (conversationList) {
-          const sidebarElement = conversationList.closest('.sidebar');
-          if (sidebarElement) {
-            sidebarElement.style.opacity = '0.5';
-            sidebarElement.style.pointerEvents = 'none';
-          }
-        }
       }
 
       // Event Listeners

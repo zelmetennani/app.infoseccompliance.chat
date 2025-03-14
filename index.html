@@ -284,24 +284,12 @@
       const auth = firebase.auth();
       const db = firebase.firestore();
       
-      // Set persistence to SESSION
-      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-        .then(() => {
-          console.log("Firebase persistence set to SESSION");
-        })
-        .catch(error => {
-          console.error("Error setting persistence:", error);
-        });
-      
-      // OpenAI API Configuration
-      const OPENAI_API_KEY = ""; // This should be set securely on your backend
-      const ASSISTANT_ID = ""; // Replace with your actual Assistant ID through backend
-      
       // Global variables
       let currentUser = null;
       let currentThreadId = null;
       let currentConversationId = null;
-
+      let authCheckInProgress = true; // Flag to prevent immediate redirects
+      
       // DOM Elements
       const chatMessages = document.getElementById('chatMessages');
       const chatForm = document.getElementById('chatForm');
@@ -313,59 +301,195 @@
       const userEmail = document.getElementById('userEmail');
       const userProfilePic = document.getElementById('userProfilePic');
 
-      // Simple auth state listener with loading state
+      // Show initial loading message
+      showAuthLoadingMessage("Initializing authentication...");
+      
+      // Set persistence early
+      console.log("Setting Firebase persistence to SESSION...");
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+        .then(() => {
+          console.log("✓ Firebase persistence set to SESSION successfully");
+          // Start the robust auth check process
+          checkAuthState();
+        })
+        .catch(error => {
+          console.error("✗ Error setting persistence:", error);
+          // Continue with auth check even if persistence setting fails
+          checkAuthState();
+        });
+      
+      // Robust auth state checking function with delays
+      function checkAuthState() {
+        console.log("Starting robust auth state check...");
+        showAuthLoadingMessage("Checking authentication status...");
+        
+        // First check - immediate
+        let currentUser = firebase.auth().currentUser;
+        console.log("Initial auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
+        
+        if (currentUser) {
+          console.log("✓ User authenticated on first check");
+          authCheckInProgress = false;
+          handleAuthenticatedUser(currentUser);
+          return;
+        }
+        
+        // Second check - after a short delay (500ms)
+        console.log("No user found on first check, trying again in 500ms...");
+        setTimeout(() => {
+          currentUser = firebase.auth().currentUser;
+          console.log("Second auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found yet");
+          
+          if (currentUser) {
+            console.log("✓ User authenticated on second check");
+            authCheckInProgress = false;
+            handleAuthenticatedUser(currentUser);
+            return;
+          }
+          
+          // Third check - after a longer delay (2 seconds)
+          console.log("No user found on second check, trying again in 2 seconds...");
+          showAuthLoadingMessage("Still checking authentication... (this may take a moment)");
+          
+          setTimeout(() => {
+            currentUser = firebase.auth().currentUser;
+            console.log("Third auth check:", currentUser ? `User found: ${currentUser.uid}` : "No user found after delays");
+            
+            if (currentUser) {
+              console.log("✓ User authenticated on third check");
+              authCheckInProgress = false;
+              handleAuthenticatedUser(currentUser);
+              return;
+            }
+            
+            // Final check - check if Firebase is properly initialized
+            if (firebase.apps.length === 0) {
+              console.error("✗ Firebase not initialized properly");
+              showAuthError("Firebase initialization error", "The authentication service is not properly initialized. Please try refreshing the page.");
+              return;
+            }
+            
+            // No user found after multiple checks
+            console.log("✗ No authenticated user found after multiple checks, redirecting to sign-in page");
+            authCheckInProgress = false;
+            showAuthLoadingMessage("Authentication required. Redirecting to sign-in page...");
+            
+            // Final redirect after a short delay
+            setTimeout(() => {
+              window.location.href = "https://infoseccompliance.chat/signin.html";
+            }, 1000);
+          }, 2000);
+        }, 500);
+      }
+      
+      // Handle authenticated user
+      function handleAuthenticatedUser(user) {
+        console.log("Handling authenticated user:", user.uid);
+        showAuthLoadingMessage("Authentication successful! Loading your data...");
+        
+        // Update UI with user info
+        updateUserProfile(user);
+        
+        // Load user data
+        loadUserConversations(user.uid);
+        
+        // Start a new conversation if needed
+        if (!currentThreadId) {
+          startNewConversation();
+        }
+        
+        // Clear loading message
+        setTimeout(() => {
+          const loadingMessage = document.getElementById('auth-loading-message');
+          if (loadingMessage) {
+            loadingMessage.remove();
+          }
+        }, 500);
+      }
+      
+      // Show auth loading message
+      function showAuthLoadingMessage(message) {
+        // Remove any existing loading message
+        const existingMessage = document.getElementById('auth-loading-message');
+        if (existingMessage) {
+          existingMessage.remove();
+        }
+        
+        // Add new loading message
+        if (chatMessages) {
+          const loadingDiv = document.createElement('div');
+          loadingDiv.id = 'auth-loading-message';
+          loadingDiv.className = 'message ai-message';
+          loadingDiv.innerHTML = `
+            <h4>Authentication Status</h4>
+            <p>${message}</p>
+            <div class="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          `;
+          chatMessages.appendChild(loadingDiv);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+      
+      // Show auth error message
+      function showAuthError(title, message) {
+        // Remove any existing loading message
+        const existingMessage = document.getElementById('auth-loading-message');
+        if (existingMessage) {
+          existingMessage.remove();
+        }
+        
+        // Add error message
+        if (chatMessages) {
+          const errorDiv = document.createElement('div');
+          errorDiv.id = 'auth-error-message';
+          errorDiv.className = 'message ai-message';
+          errorDiv.style.backgroundColor = '#f8d7da';
+          errorDiv.style.color = '#721c24';
+          errorDiv.innerHTML = `
+            <h4>${title}</h4>
+            <p>${message}</p>
+            <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-danger btn-sm mt-2">Go to Sign In</a></p>
+          `;
+          chatMessages.appendChild(errorDiv);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+      
+      // Keep the original auth state listener but prevent immediate redirects
       auth.onAuthStateChanged((user) => {
         console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
         
-        // Clear any existing loading message
-        const loadingMessage = document.getElementById('auth-loading-message');
-        if (loadingMessage) {
-          loadingMessage.remove();
-        }
-        
         if (user) {
           // User is signed in
-          console.log("User is authenticated:", user);
           currentUser = user;
-          updateUserProfile(user);
-          loadUserConversations(user.uid);
           
-          // If we don't have a thread yet, start a new conversation
-          if (!currentThreadId) {
-            startNewConversation();
+          // Only update UI if auth check is complete
+          if (!authCheckInProgress) {
+            updateUserProfile(user);
+            
+            // If we don't have conversations loaded yet, load them
+            if (conversationList && conversationList.children.length === 0) {
+              loadUserConversations(user.uid);
+            }
+            
+            // If we don't have a thread yet, start a new conversation
+            if (!currentThreadId) {
+              startNewConversation();
+            }
           }
         } else {
-          // Show loading message first
-          const chatMessages = document.getElementById('chatMessages');
-          if (chatMessages) {
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = 'auth-loading-message';
-            loadingDiv.className = 'message ai-message';
-            loadingDiv.innerHTML = `
-              <h4>Checking Authentication...</h4>
-              <p>Please wait while we verify your session...</p>
-            `;
-            chatMessages.appendChild(loadingDiv);
+          // No user is signed in
+          // Only redirect if auth check is complete and we're sure there's no user
+          if (!authCheckInProgress) {
+            console.log("Auth state listener confirms no user, redirecting to signin page");
+            window.location.href = "https://infoseccompliance.chat/signin.html";
+          } else {
+            console.log("Auth state listener found no user, but auth check is still in progress");
           }
-          
-          // Wait a bit before redirecting to give Firebase time to initialize
-          console.log("No user signed in, waiting before redirecting...");
-          setTimeout(() => {
-            // Check again if user is now authenticated
-            const currentUser = firebase.auth().currentUser;
-            if (!currentUser) {
-              console.log("Still no user after delay, redirecting to signin page");
-              window.location.href = "https://infoseccompliance.chat/signin.html";
-            } else {
-              console.log("User detected after delay:", currentUser.uid);
-              // User is now authenticated, update UI
-              updateUserProfile(currentUser);
-              loadUserConversations(currentUser.uid);
-              if (!currentThreadId) {
-                startNewConversation();
-              }
-            }
-          }, 3000); // 3 second delay
         }
       });
 

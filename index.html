@@ -237,7 +237,7 @@
             
             firebaseConfig = {
               apiKey: envVars.FIREBASE_API_KEY,
-              authDomain: envVars.FIREBASE_AUTH_DOMAIN,
+              authDomain: "infoseccompliance.chat",
               projectId: envVars.FIREBASE_PROJECT_ID,
               storageBucket: envVars.FIREBASE_STORAGE_BUCKET,
               messagingSenderId: envVars.FIREBASE_MESSAGING_SENDER_ID,
@@ -272,10 +272,10 @@
           } catch (appError) {
             console.log("Firebase is loaded but no app exists, initializing with default config");
             
-            // Initialize with a default config
+            // Initialize with a default config - MAKE SURE THESE VALUES MATCH EXACTLY WITH YOUR MARKETING SITE
             firebase.initializeApp({
               apiKey: "AIzaSyDQP4SoFyVPVYtb5-CIL0RbdAKJ5kZtGes",
-              authDomain: "infosec-compliance-chat.firebaseapp.com",
+              authDomain: "infoseccompliance.chat",
               projectId: "infosec-compliance-chat",
               storageBucket: "infosec-compliance-chat.appspot.com",
               messagingSenderId: "123456789012",
@@ -322,6 +322,12 @@
       const auth = firebase.auth();
       const db = firebase.firestore();
       
+      // Set up auth state listener immediately
+      auth.onAuthStateChanged((user) => {
+        console.log("Early auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
+        // Don't take action yet, just log
+      });
+      
       // Global variables
       let currentUser = null;
       let currentThreadId = null;
@@ -346,8 +352,8 @@
       firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
         .then(() => {
           console.log("✓ Firebase persistence set to LOCAL successfully");
-          // Start the robust auth check process
-          checkAuthState();
+          // Start with a direct token check
+          checkAuthWithToken();
         })
         .catch(error => {
           console.error("✗ Error setting persistence:", error);
@@ -358,6 +364,12 @@
       // Modify the checkAuthState function to only display auth status
       function checkAuthState() {
         console.log("Starting auth state check...");
+        
+        // Check for Firebase cookies
+        const hasCookies = checkForFirebaseCookies();
+        if (!hasCookies) {
+          console.log("No Firebase auth cookies found, user is likely not authenticated");
+        }
         
         // Check if we're coming from a sign-in
         const comingFromSignIn = localStorage.getItem('comingFromSignIn');
@@ -1016,6 +1028,47 @@
         // Logout button
         logoutBtn.addEventListener('click', signOut);
       });
+
+      // Add this function to directly check authentication with the token
+      function checkAuthWithToken() {
+        // Get the current user
+        const user = firebase.auth().currentUser;
+        
+        if (user) {
+          // Get the ID token
+          user.getIdToken(true)
+            .then(idToken => {
+              console.log("Successfully retrieved ID token, user is authenticated");
+              authCheckInProgress = false;
+              handleAuthenticatedUser(user);
+            })
+            .catch(error => {
+              console.error("Error getting ID token:", error);
+              // Continue with normal auth checks
+              checkAuthState();
+            });
+        } else {
+          // No user found, continue with normal auth checks
+          checkAuthState();
+        }
+      }
+
+      // Add this function to check for Firebase auth cookies
+      function checkForFirebaseCookies() {
+        const cookies = document.cookie.split(';');
+        let firebaseAuthCookie = false;
+        
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.indexOf('firebase:authUser') === 0) {
+            firebaseAuthCookie = true;
+            break;
+          }
+        }
+        
+        console.log("Firebase auth cookie present:", firebaseAuthCookie);
+        return firebaseAuthCookie;
+      }
     }
 
     // Call this function to start loading Firebase config

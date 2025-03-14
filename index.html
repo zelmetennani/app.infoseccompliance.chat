@@ -266,8 +266,18 @@
         initializeApp();
       } catch (e) {
         console.error("No Firebase app found and couldn't load config:", e);
-        // Redirect to sign-in page
-        window.location.href = "https://infoseccompliance.chat/signin.html";
+        // Show error instead of redirecting
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+          chatMessages.innerHTML = `
+            <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
+              <h4>Firebase Initialization Error</h4>
+              <p>Could not initialize Firebase. Please try refreshing the page.</p>
+              <p>Error details: ${e.message}</p>
+              <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-danger btn-sm mt-2">Go to Sign In</a></p>
+            </div>
+          `;
+        }
       }
     }
 

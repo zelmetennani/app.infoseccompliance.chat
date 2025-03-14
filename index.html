@@ -551,21 +551,21 @@
     // Call this function early
     checkThirdPartyCookieSupport();
 
-    // Update this function with better debugging
+    // Update the checkForTokenInUrl function
     function checkForTokenInUrl() {
       console.log("Checking for token in URL...");
       
       // Check if we have a hash in the URL
       if (window.location.hash) {
-        console.log(`URL hash found: ${window.location.hash.substring(0, 20)}...`);
+        console.log(`URL hash found: ${window.location.hash}`);
         
         // Check if the hash contains a token
         if (window.location.hash.includes('token=')) {
           console.log("Token parameter found in URL hash");
           
           try {
-            // Extract the token
-            const token = window.location.hash.split('token=')[1];
+            // Extract the token - handle URL encoding
+            const token = decodeURIComponent(window.location.hash.split('token=')[1]);
             console.log(`Token extracted, length: ${token.length} characters`);
             console.log(`Token starts with: ${token.substring(0, 10)}...`);
             
@@ -573,36 +573,22 @@
             window.history.replaceState(null, null, window.location.pathname);
             console.log("Token cleared from URL");
             
-            // Sign in with the token
-            console.log("Attempting to sign in with ID token...");
+            // Try a different approach - use the Firebase Auth REST API
+            console.log("Attempting to sign in with custom token...");
             
-            // Use signInWithCredential instead of signInWithCustomToken
-            const credential = firebase.auth.GoogleAuthProvider.credential(token);
-            firebase.auth().signInWithCredential(credential)
+            return firebase.auth().signInWithCustomToken(token)
               .then((userCredential) => {
-                console.log("Successfully signed in with token");
+                console.log("Successfully signed in with custom token");
                 console.log(`User ID: ${userCredential.user.uid}`);
-                console.log(`Email: ${userCredential.user.email}`);
+                return true;
               })
               .catch((error) => {
-                console.error("Error signing in with credential:", error);
+                console.error("Error signing in with custom token:", error);
                 
-                // Try alternative method if the first one fails
-                console.log("Trying alternative sign-in method...");
-                firebase.auth().signInWithCustomToken(token)
-                  .then((userCredential) => {
-                    console.log("Successfully signed in with custom token");
-                  })
-                  .catch((secondError) => {
-                    console.error("Error signing in with custom token:", secondError);
-                    
-                    // Show error on page
-                    showError("Authentication Error", 
-                      `Could not authenticate with token. Error: ${error.message}. Second attempt error: ${secondError.message}`);
-                  });
+                // Try with ID token
+                console.log("Custom token failed, trying ID token approach...");
+                return signInDirectlyWithIdToken(token);
               });
-            
-            return true;
           } catch (e) {
             console.error("Error processing token from URL:", e);
             showError("Token Processing Error", `Could not process authentication token: ${e.message}`);
@@ -616,6 +602,35 @@
       }
       
       return false;
+    }
+
+    // Add a function to sign in directly with ID token
+    function signInDirectlyWithIdToken(token) {
+      // This is a workaround since Firebase doesn't have a direct method to sign in with ID token
+      console.log("Attempting direct ID token authentication...");
+      
+      // Create a credential with the token
+      try {
+        // For Firebase Auth
+        const credential = firebase.auth.PhoneAuthProvider.credential(token, 'unused');
+        
+        return firebase.auth().signInWithCredential(credential)
+          .then((userCredential) => {
+            console.log("Successfully signed in with ID token credential");
+            return true;
+          })
+          .catch((error) => {
+            console.error("Error signing in with ID token credential:", error);
+            
+            // Show error on page
+            showError("Authentication Error", 
+              `Could not authenticate with ID token. Error: ${error.message}`);
+            return false;
+          });
+      } catch (e) {
+        console.error("Error creating credential from ID token:", e);
+        return false;
+      }
     }
 
     // Add this function to check for token in storage
@@ -647,28 +662,43 @@
       console.log(`Attempting to sign in with token from ${source}...`);
       console.log(`Token length: ${token.length}, starts with: ${token.substring(0, 10)}...`);
       
-      // Try to sign in with the token
-      return firebase.auth().signInWithIdToken(token)
-        .then((userCredential) => {
-          console.log(`Successfully signed in with token from ${source}`);
-          return true;
-        })
-        .catch((error) => {
-          console.error(`Error signing in with token from ${source}:`, error);
-          
-          // Try alternative method
-          console.log("Trying alternative sign-in method...");
-          const credential = firebase.auth.GoogleAuthProvider.credential(null, token);
-          return firebase.auth().signInWithCredential(credential)
-            .then((userCredential) => {
-              console.log(`Successfully signed in with credential from ${source}`);
-              return true;
-            })
-            .catch((secondError) => {
-              console.error(`Error signing in with credential from ${source}:`, secondError);
-              return false;
-            });
-        });
+      // The correct way to use an ID token is to create a credential first
+      try {
+        // For Google Auth Provider
+        const credential = firebase.auth.GoogleAuthProvider.credential(null, token);
+        
+        return firebase.auth().signInWithCredential(credential)
+          .then((userCredential) => {
+            console.log(`Successfully signed in with credential from ${source}`);
+            return true;
+          })
+          .catch((error) => {
+            console.error(`Error signing in with credential from ${source}:`, error);
+            
+            // Try another approach - sign in anonymously and then link with credential
+            console.log("Trying to sign in anonymously and then link credential...");
+            return firebase.auth().signInAnonymously()
+              .then((anonymousUser) => {
+                return anonymousUser.user.linkWithCredential(credential);
+              })
+              .then((result) => {
+                console.log("Successfully linked credential to anonymous user");
+                return true;
+              })
+              .catch((secondError) => {
+                console.error("Error with anonymous auth approach:", secondError);
+                
+                // As a last resort, try to verify the token on your own backend
+                console.log("Token authentication failed. Consider implementing a backend verification.");
+                showError("Authentication Error", 
+                  `Could not authenticate with token from ${source}. Please try signing in again.`);
+                return false;
+              });
+          });
+      } catch (e) {
+        console.error("Error creating credential:", e);
+        return false;
+      }
     }
   </script>
 </body>

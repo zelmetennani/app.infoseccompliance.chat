@@ -312,15 +312,13 @@
           
           // Initialize Firebase with the exact same config as the main site
           if (!firebase.apps.length) {
-            firebase.initializeApp({
-              apiKey: "AIzaSyDQP4SoFyVPVYtb5-CIL0RbdAKJ5kZtGes",
-              authDomain: "infoseccompliance.chat", // Critical: must match main site
-              projectId: "infosec-compliance-chat",
-              storageBucket: "infosec-compliance-chat.appspot.com",
-              messagingSenderId: "123456789012",
-              appId: "1:123456789012:web:abcdef1234567890abcdef"
-            });
-            console.log("Step 3: Firebase initialized with config");
+            if (window.firebaseConfig && window.firebaseConfig.apiKey) {
+              firebase.initializeApp(window.firebaseConfig);
+              console.log("Step 3: Firebase initialized with config from config.js");
+            } else {
+              console.error("Firebase configuration is missing or invalid");
+              showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
+            }
           } else {
             console.log("Step 3: Using existing Firebase app");
           }

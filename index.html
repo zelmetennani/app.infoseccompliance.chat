@@ -469,20 +469,67 @@
       });
     }
 
-    // Check authentication state with proper logging
+    // Update the checkAuthState function to be more thorough
     function checkAuthState() {
       console.log("Checking authentication state...");
       showAuthLoadingMessage("Verifying authentication...");
       
+      // First check if we already have a user
       const user = firebase.auth().currentUser;
       console.log("Current user:", user ? `Found: ${user.uid}` : "None found");
       
-      // Mark auth check as complete
-      authCheckComplete = true;
-      initialAuthCheckInProgress = false;
+      if (user) {
+        // We have a user, update UI and finish
+        console.log("User already authenticated, updating UI");
+        authCheckComplete = true;
+        initialAuthCheckInProgress = false;
+        updateUIForAuthState(user);
+        return;
+      }
       
-      // Update UI based on auth state
-      updateUIForAuthState(user);
+      // No current user, check for ID token in cookies
+      console.log("No current user, checking for ID token in cookies");
+      
+      // Parse cookies
+      const cookies = document.cookie.split(';');
+      let hasIdTokenCookie = false;
+      
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith('firebaseIdToken=')) {
+          hasIdTokenCookie = true;
+          console.log("Found ID token cookie, authentication might be in progress");
+          break;
+        }
+      }
+      
+      if (hasIdTokenCookie) {
+        console.log("ID token cookie found, waiting longer for authentication to complete");
+        
+        // Add a longer delay to give the token authentication time to complete
+        setTimeout(() => {
+          // Check again after the delay
+          const userAfterDelay = firebase.auth().currentUser;
+          
+          if (userAfterDelay) {
+            console.log("User authenticated after delay, updating UI");
+            authCheckComplete = true;
+            initialAuthCheckInProgress = false;
+            updateUIForAuthState(userAfterDelay);
+          } else {
+            console.log("Still no user after delay, showing not authenticated state");
+            authCheckComplete = true;
+            initialAuthCheckInProgress = false;
+            updateUIForAuthState(null);
+          }
+        }, 5000); // Increased to 5 seconds for token processing
+      } else {
+        // No user and no token cookie, mark as not authenticated
+        console.log("No user and no token cookie, showing not authenticated state");
+        authCheckComplete = true;
+        initialAuthCheckInProgress = false;
+        updateUIForAuthState(null);
+      }
     }
 
     // Update UI based on authentication state

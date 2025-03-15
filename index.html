@@ -653,16 +653,73 @@
       }
     }
 
+    // Update the showAuthError function to display full debug info
     function showAuthError(title, message) {
       const chatMessages = document.getElementById('chatMessages');
       if (chatMessages) {
+        // Get detailed debug info
+        const cookies = inspectCookiesForDebug();
+        const storage = inspectStorageForDebug();
+        const auth = firebase.auth();
+        const user = auth.currentUser;
+        
+        // Prepare debug info
+        const debugInfo = {
+          timestamp: new Date().toISOString(),
+          browser: {
+            userAgent: navigator.userAgent,
+            cookiesEnabled: navigator.cookieEnabled,
+            platform: navigator.platform,
+            language: navigator.language
+          },
+          network: {
+            domain: window.location.hostname,
+            protocol: window.location.protocol,
+            referrer: document.referrer,
+            fullUrl: window.location.href
+          },
+          firebase: {
+            initialized: firebase.apps.length > 0,
+            appName: firebase.apps.length > 0 ? firebase.app().name : 'none',
+            authDomain: firebase.apps.length > 0 ? firebase.app().options.authDomain : 'none',
+            persistenceType: 'SESSION (configured)',
+            configAuthDomain: window.firebaseConfig ? window.firebaseConfig.authDomain : 'not set'
+          },
+          authState: {
+            authInitialized: authInitialized,
+            authCheckComplete: authCheckComplete,
+            initialCheckInProgress: initialAuthCheckInProgress,
+            currentUser: user ? {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || 'Not set',
+              emailVerified: user.emailVerified,
+              providerId: user.providerId,
+              lastSignInTime: user.metadata?.lastSignInTime || 'Unknown'
+            } : 'No user found'
+          },
+          error: {
+            title: title,
+            message: message
+          },
+          storage: storage,
+          cookies: cookies
+        };
+        
         chatMessages.innerHTML = `
           <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
             <h4>${title}</h4>
             <p>${message}</p>
             <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary">Sign In</a></p>
+            <div class="mt-3">
+              <h5>Detailed Authentication Debug Info:</h5>
+              <pre style="max-height: 400px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #333;">${JSON.stringify(debugInfo, null, 2)}</pre>
+              <button onclick="testAuthConnection()" class="btn btn-sm btn-info mt-2">Test Auth Connection</button>
+            </div>
           </div>
         `;
+        
+        console.log("Full debug info:", debugInfo);
       }
     }
 

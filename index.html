@@ -438,7 +438,7 @@
               <h4>Authentication Status</h4>
               <p><strong>Not authenticated</strong></p>
               <p>You are not currently signed in.</p>
-              <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary">Sign In</a></p>
+              <p><button onclick="showDebugInfo()" class="btn btn-secondary">Show Debug Info</button></p>
               <div id="debug-info" style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
                 Debug info: Firebase initialized: ${authInitialized}, Auth check complete: ${authCheckComplete}, Time: ${new Date().toISOString()}
               </div>
@@ -557,6 +557,180 @@
         sidebar.style.opacity = '0.5';
         sidebar.style.pointerEvents = 'none';
       }
+    }
+
+    // Add this enhanced showDebugInfo function
+    function showDebugInfo() {
+      console.log("Showing detailed debug info");
+      
+      // Check cookies and localStorage
+      const cookies = inspectCookiesForDebug();
+      const storage = inspectStorageForDebug();
+      
+      // Get Firebase auth state
+      const auth = firebase.auth();
+      const user = auth.currentUser;
+      
+      // Prepare debug info
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        browser: {
+          userAgent: navigator.userAgent,
+          cookiesEnabled: navigator.cookieEnabled,
+          platform: navigator.platform,
+          language: navigator.language
+        },
+        network: {
+          domain: window.location.hostname,
+          protocol: window.location.protocol,
+          referrer: document.referrer,
+          fullUrl: window.location.href
+        },
+        firebase: {
+          initialized: firebase.apps.length > 0,
+          appName: firebase.apps.length > 0 ? firebase.app().name : 'none',
+          authDomain: firebase.apps.length > 0 ? firebase.app().options.authDomain : 'none',
+          persistenceType: 'SESSION (configured)'
+        },
+        authState: {
+          authInitialized: authInitialized,
+          authCheckComplete: authCheckComplete,
+          initialCheckInProgress: initialAuthCheckInProgress,
+          currentUser: user ? {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || 'Not set',
+            emailVerified: user.emailVerified,
+            providerId: user.providerId,
+            lastSignInTime: user.metadata?.lastSignInTime || 'Unknown'
+          } : 'No user found'
+        },
+        storage: storage,
+        cookies: cookies
+      };
+      
+      // Display debug info
+      const debugElement = document.getElementById('debug-info');
+      if (debugElement) {
+        debugElement.innerHTML = `
+          <h5>Detailed Authentication Debug Info:</h5>
+          <pre style="max-height: 400px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.7rem;">${JSON.stringify(debugInfo, null, 2)}</pre>
+          <button onclick="testAuthConnection()" class="btn btn-sm btn-info mt-2">Test Auth Connection</button>
+        `;
+      }
+      
+      console.log("Debug info:", debugInfo);
+    }
+
+    // Helper function to inspect cookies for debugging
+    function inspectCookiesForDebug() {
+      const cookies = document.cookie.split(';');
+      const cookieInfo = {
+        totalCount: cookies.length,
+        cookieNames: [],
+        firebaseRelated: []
+      };
+      
+      cookies.forEach(cookie => {
+        const trimmedCookie = cookie.trim();
+        if (trimmedCookie) {
+          const name = trimmedCookie.split('=')[0];
+          cookieInfo.cookieNames.push(name);
+          
+          if (name.includes('firebase') || name.includes('auth')) {
+            cookieInfo.firebaseRelated.push(name);
+          }
+        }
+      });
+      
+      return cookieInfo;
+    }
+
+    // Helper function to inspect localStorage and sessionStorage
+    function inspectStorageForDebug() {
+      const storageInfo = {
+        localStorage: {
+          totalCount: localStorage.length,
+          keys: [],
+          firebaseRelated: []
+        },
+        sessionStorage: {
+          totalCount: sessionStorage.length,
+          keys: [],
+          firebaseRelated: []
+        }
+      };
+      
+      // Check localStorage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        storageInfo.localStorage.keys.push(key);
+        
+        if (key.includes('firebase') || key.includes('auth')) {
+          storageInfo.localStorage.firebaseRelated.push(key);
+        }
+      }
+      
+      // Check sessionStorage
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        storageInfo.sessionStorage.keys.push(key);
+        
+        if (key.includes('firebase') || key.includes('auth')) {
+          storageInfo.sessionStorage.firebaseRelated.push(key);
+        }
+      }
+      
+      return storageInfo;
+    }
+
+    // Add a function to test auth connection
+    function testAuthConnection() {
+      console.log("Testing auth connection...");
+      const debugElement = document.getElementById('debug-info');
+      
+      if (debugElement) {
+        debugElement.innerHTML += `
+          <div class="mt-2 p-2 bg-light">
+            <div class="d-flex align-items-center">
+              <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+              <span>Testing authentication connection...</span>
+            </div>
+          </div>
+        `;
+      }
+      
+      // Try to get the current user again
+      firebase.auth().currentUser?.reload()
+        .then(() => {
+          const user = firebase.auth().currentUser;
+          
+          if (debugElement) {
+            if (user) {
+              debugElement.innerHTML += `
+                <div class="mt-2 p-2 bg-success text-white">
+                  Authentication connection successful!<br>
+                  User: ${user.email || user.uid}
+                </div>
+              `;
+            } else {
+              debugElement.innerHTML += `
+                <div class="mt-2 p-2 bg-warning">
+                  Authentication connection test complete, but no user found.
+                </div>
+              `;
+            }
+          }
+        })
+        .catch(error => {
+          if (debugElement) {
+            debugElement.innerHTML += `
+              <div class="mt-2 p-2 bg-danger text-white">
+                Authentication connection error: ${error.message}
+              </div>
+            `;
+          }
+        });
     }
   </script>
 </body>

@@ -23,9 +23,9 @@ Object.keys(envVars).forEach(key => {
   console.log(`- ${key}: ${isSet ? 'Set ✓' : 'Not set ✗'}`);
 });
 
-// Create a config.js file with the environment variables
+// Create a direct config.js file with the values
 const configContent = `
-// Generated config file with environment variables
+// Firebase configuration - Generated during build
 window.firebaseConfig = {
   apiKey: "${envVars.apiKey}",
   authDomain: "${envVars.authDomain}",
@@ -33,7 +33,7 @@ window.firebaseConfig = {
   storageBucket: "${envVars.storageBucket}",
   messagingSenderId: "${envVars.messagingSenderId}",
   appId: "${envVars.appId}",
-  measurementId: "${envVars.measurementId}"
+  measurementId: "${envVars.measurementId || ''}"
 };
 
 console.log("Firebase config loaded from environment variables");

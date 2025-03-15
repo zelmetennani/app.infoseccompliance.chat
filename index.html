@@ -885,7 +885,7 @@
         });
     }
 
-    // Update the token handling function to use signInWithCustomToken
+    // Update the token handling function to stay on the app page if auth fails
     function checkForIdTokenInCookies() {
       console.log("Checking for ID token in cookies");
       
@@ -918,32 +918,27 @@
             })
             .catch((error) => {
               console.error("Error signing in with custom token:", error);
-              console.log("Custom token authentication failed, trying alternative approach");
+              console.log("Custom token authentication failed, showing debug info");
               
-              // If direct sign-in fails, try to decode the token and use the information
-              try {
-                // Decode the base64-encoded token (if it's in JWT format)
-                const tokenParts = idToken.split('.');
-                if (tokenParts.length === 3) {
-                  const payload = JSON.parse(atob(tokenParts[1]));
-                  console.log("Decoded token payload:", payload);
-                  
-                  // Use the email from the token to sign in
-                  if (payload.email) {
-                    console.log(`Attempting to sign in with email: ${payload.email}`);
-                    // This would require the user's password, which we don't have
-                    // Instead, redirect to the sign-in page with the email pre-filled
-                    window.location.href = `https://infoseccompliance.chat/signin.html?email=${encodeURIComponent(payload.email)}`;
-                  }
-                }
-              } catch (decodeError) {
-                console.error("Error decoding token:", decodeError);
-              }
+              // Show debug info instead of redirecting
+              setTimeout(() => {
+                console.log("Showing debug info after auth failure");
+                showAuthError("Authentication Error", `Could not authenticate with token: ${error.message}`);
+                showDebugInfo();
+              }, 1000);
             });
           
           return true;
         } catch (error) {
           console.error("Error with token authentication:", error);
+          
+          // Show debug info instead of redirecting
+          setTimeout(() => {
+            console.log("Showing debug info after auth error");
+            showAuthError("Authentication Error", `Error processing authentication token: ${error.message}`);
+            showDebugInfo();
+          }, 1000);
+          
           return false;
         }
       }

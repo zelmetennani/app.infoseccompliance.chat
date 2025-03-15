@@ -322,11 +322,11 @@
               console.log("Step 4: Using existing Firebase app");
             }
             
-            // Set persistence to LOCAL early in the process
-            console.log("Step 5: Setting Firebase persistence to LOCAL");
-            firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+            // Set persistence to SESSION early in the process
+            console.log("Step 5: Setting Firebase persistence to SESSION");
+            firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
               .then(() => {
-                console.log("Step 6: Firebase persistence set to LOCAL successfully");
+                console.log("Step 6: Firebase persistence set to SESSION successfully");
                 authInitialized = true;
                 
                 // Check for token in URL first
@@ -371,11 +371,11 @@
                   console.log("Step 6: Using existing Firebase app");
                 }
                 
-                // Set persistence to LOCAL
-                console.log("Step 7: Setting Firebase persistence to LOCAL");
-                firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                // Set persistence to SESSION
+                console.log("Step 7: Setting Firebase persistence to SESSION");
+                firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
                   .then(() => {
-                    console.log("Step 8: Firebase persistence set to LOCAL successfully");
+                    console.log("Step 8: Firebase persistence set to SESSION successfully");
                     authInitialized = true;
                     
                     // Check for token in URL first
@@ -629,13 +629,25 @@
     function showDebugInfo() {
       console.log("Showing detailed debug info");
       
-      // Check cookies and localStorage
+      // Check cookies and localStorage with more detail
       const cookies = inspectCookiesForDebug();
       const storage = inspectStorageForDebug();
       
       // Get Firebase auth state
       const auth = firebase.auth();
       const user = auth.currentUser;
+      
+      // Log Firebase auth cookies specifically
+      console.log("Checking for Firebase auth cookies:");
+      document.cookie.split(';').forEach(cookie => {
+        const trimmedCookie = cookie.trim();
+        if (trimmedCookie.includes('firebase') || trimmedCookie.includes('auth')) {
+          console.log("Found auth-related cookie:", trimmedCookie.split('=')[0]);
+        }
+      });
+      
+      // Check if we're using the correct auth domain
+      console.log("Firebase auth domain:", firebase.app().options.authDomain);
       
       // Prepare debug info
       const debugInfo = {
@@ -656,7 +668,7 @@
           initialized: firebase.apps.length > 0,
           appName: firebase.apps.length > 0 ? firebase.app().name : 'none',
           authDomain: firebase.apps.length > 0 ? firebase.app().options.authDomain : 'none',
-          persistenceType: 'LOCAL (configured)'
+          persistenceType: 'SESSION (configured)'
         },
         authState: {
           authInitialized: authInitialized,

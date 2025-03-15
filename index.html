@@ -325,11 +325,11 @@
             console.log("Step 3: Using existing Firebase app");
           }
           
-          // Set persistence to SESSION early in the process
-          console.log("Step 4: Setting Firebase persistence to SESSION");
-          firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+          // Set persistence to LOCAL early in the process
+          console.log("Step 4: Setting Firebase persistence to LOCAL");
+          firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
             .then(() => {
-              console.log("Step 5: Firebase persistence set to SESSION successfully");
+              console.log("Step 5: Firebase persistence set to LOCAL successfully");
               authInitialized = true;
               
               // Check for token in URL first
@@ -590,7 +590,7 @@
           initialized: firebase.apps.length > 0,
           appName: firebase.apps.length > 0 ? firebase.app().name : 'none',
           authDomain: firebase.apps.length > 0 ? firebase.app().options.authDomain : 'none',
-          persistenceType: 'SESSION (configured)'
+          persistenceType: 'LOCAL (configured)'
         },
         authState: {
           authInitialized: authInitialized,

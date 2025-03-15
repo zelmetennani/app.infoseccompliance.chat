@@ -534,9 +534,17 @@
       }
     }
 
-    // Initialize the app
+    // Add this function to the top of your script section
+    function setupCrossDomainAuth() {
+      // Set a cookie on the .infoseccompliance.chat domain to enable sharing
+      document.cookie = "firebaseAuthEnabled=true; domain=.infoseccompliance.chat; path=/; SameSite=None; Secure";
+      console.log("Set cross-domain cookie for authentication");
+    }
+
+    // Call this function early in the initialization process
     document.addEventListener('DOMContentLoaded', function() {
       console.log("DOM content loaded, starting initialization sequence");
+      setupCrossDomainAuth();
       loadFirebaseConfig();
       
       // Set up logout button
@@ -813,6 +821,47 @@
           }
         });
     }
+
+    // Add this function to check for ID token in cookies
+    function checkForIdTokenInCookies() {
+      console.log("Checking for ID token in cookies");
+      
+      // Parse cookies
+      const cookies = document.cookie.split(';');
+      let idToken = null;
+      
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith('firebaseIdToken=')) {
+          idToken = cookie.substring('firebaseIdToken='.length);
+          console.log("Found ID token in cookies");
+          break;
+        }
+      }
+      
+      if (idToken) {
+        console.log("Signing in with ID token from cookie");
+        
+        // Sign in with the ID token
+        firebase.auth().signInWithCustomToken(idToken)
+          .then((userCredential) => {
+            console.log("Successfully signed in with token from cookie");
+            // Clear the cookie after use
+            document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
+          })
+          .catch((error) => {
+            console.error("Error signing in with token from cookie:", error);
+          });
+        
+        return true;
+      }
+      
+      return false;
+    }
+
+    // Call this function in your initialization sequence
+    // Add this after firebase initialization but before checking auth state
+    const hasTokenInCookies = checkForIdTokenInCookies();
   </script>
 </body>
 </html>

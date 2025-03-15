@@ -316,8 +316,9 @@
             
             // Initialize Firebase with the config
             if (!firebase.apps.length) {
+              console.log("Step 4: Initializing Firebase with config");
               firebase.initializeApp(window.firebaseConfig);
-              console.log("Step 4: Firebase initialized with config from window.firebaseConfig");
+              console.log("Step 4a: Firebase initialized successfully");
             } else {
               console.log("Step 4: Using existing Firebase app");
             }
@@ -365,8 +366,9 @@
                 
                 // Initialize Firebase with the config
                 if (!firebase.apps.length) {
+                  console.log("Step 6: Initializing Firebase with config");
                   firebase.initializeApp(window.firebaseConfig);
-                  console.log("Step 6: Firebase initialized with config from config.js");
+                  console.log("Step 6a: Firebase initialized successfully");
                 } else {
                   console.log("Step 6: Using existing Firebase app");
                 }
@@ -668,7 +670,8 @@
           initialized: firebase.apps.length > 0,
           appName: firebase.apps.length > 0 ? firebase.app().name : 'none',
           authDomain: firebase.apps.length > 0 ? firebase.app().options.authDomain : 'none',
-          persistenceType: 'SESSION (configured)'
+          persistenceType: 'SESSION (configured)',
+          configAuthDomain: window.firebaseConfig ? window.firebaseConfig.authDomain : 'not set'
         },
         authState: {
           authInitialized: authInitialized,

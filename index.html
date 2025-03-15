@@ -822,7 +822,7 @@
         });
     }
 
-    // Add this function to check for ID token in cookies
+    // Update the checkForIdTokenInCookies function with a simpler approach
     function checkForIdTokenInCookies() {
       console.log("Checking for ID token in cookies");
       
@@ -840,20 +840,28 @@
       }
       
       if (idToken) {
-        console.log("Signing in with ID token from cookie");
+        console.log("Found ID token, attempting to sign in with credential");
         
-        // Sign in with the ID token
-        firebase.auth().signInWithCustomToken(idToken)
-          .then((userCredential) => {
-            console.log("Successfully signed in with token from cookie");
-            // Clear the cookie after use
-            document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
-          })
-          .catch((error) => {
-            console.error("Error signing in with token from cookie:", error);
-          });
-        
-        return true;
+        try {
+          // Create a credential from the ID token
+          const credential = firebase.auth.GoogleAuthProvider.credential(null, idToken);
+          
+          // Sign in with credential
+          firebase.auth().signInWithCredential(credential)
+            .then((userCredential) => {
+              console.log("Successfully signed in with credential from ID token");
+              // Clear the cookie after use
+              document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
+            })
+            .catch((error) => {
+              console.error("Error signing in with credential:", error);
+            });
+          
+          return true;
+        } catch (error) {
+          console.error("Error creating credential from token:", error);
+          return false;
+        }
       }
       
       return false;

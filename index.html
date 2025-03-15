@@ -333,12 +333,20 @@
                 // Check for token in URL first
                 const hasToken = checkForTokenInUrl();
                 
-                // Add a deliberate delay before checking auth state
-                console.log("Step 7: Adding 2-second delay before checking auth state");
-                setTimeout(() => {
-                  console.log("Step 8: Delay complete, checking authentication state");
-                  checkAuthState();
-                }, 2000);
+                // Add this right after Firebase initialization but before checking auth state
+                console.log("Checking for authentication token in cookies");
+                const hasTokenInCookies = checkForIdTokenInCookies();
+                
+                // Only proceed with normal auth check if no token was found
+                if (!hasTokenInCookies) {
+                  console.log("No token found in cookies, proceeding with normal auth check");
+                  // Add a deliberate delay before checking auth state
+                  console.log("Adding 2-second delay before checking auth state");
+                  setTimeout(() => {
+                    console.log("Delay complete, checking authentication state");
+                    checkAuthState();
+                  }, 2000);
+                }
               })
               .catch(error => {
                 console.error("Error setting persistence:", error);
@@ -383,12 +391,20 @@
                     // Check for token in URL first
                     const hasToken = checkForTokenInUrl();
                     
-                    // Add a deliberate delay before checking auth state
-                    console.log("Step 9: Adding 2-second delay before checking auth state");
-                    setTimeout(() => {
-                      console.log("Step 10: Delay complete, checking authentication state");
-                      checkAuthState();
-                    }, 2000);
+                    // Add this right after Firebase initialization but before checking auth state
+                    console.log("Checking for authentication token in cookies");
+                    const hasTokenInCookies = checkForIdTokenInCookies();
+                    
+                    // Only proceed with normal auth check if no token was found
+                    if (!hasTokenInCookies) {
+                      console.log("No token found in cookies, proceeding with normal auth check");
+                      // Add a deliberate delay before checking auth state
+                      console.log("Adding 2-second delay before checking auth state");
+                      setTimeout(() => {
+                        console.log("Delay complete, checking authentication state");
+                        checkAuthState();
+                      }, 2000);
+                    }
                   })
                   .catch(error => {
                     console.error("Error setting persistence:", error);
@@ -822,7 +838,7 @@
         });
     }
 
-    // Update the checkForIdTokenInCookies function with a simpler approach
+    // Update the token handling function with a more direct approach
     function checkForIdTokenInCookies() {
       console.log("Checking for ID token in cookies");
       
@@ -840,36 +856,53 @@
       }
       
       if (idToken) {
-        console.log("Found ID token, attempting to sign in with credential");
+        console.log("Found ID token, attempting to sign in");
         
         try {
-          // Create a credential from the ID token
-          const credential = firebase.auth.GoogleAuthProvider.credential(null, idToken);
+          // Log the token length and format (without revealing the actual token)
+          console.log(`Token found (length: ${idToken.length}, starts with: ${idToken.substring(0, 5)}...)`);
           
-          // Sign in with credential
-          firebase.auth().signInWithCredential(credential)
+          // Try a direct sign-in with the token
+          firebase.auth().signInWithIdToken(idToken)
             .then((userCredential) => {
-              console.log("Successfully signed in with credential from ID token");
+              console.log("Successfully signed in with ID token");
               // Clear the cookie after use
               document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
             })
             .catch((error) => {
-              console.error("Error signing in with credential:", error);
+              console.error("Error signing in with ID token:", error);
+              console.log("ID token authentication failed, trying alternative approach");
+              
+              // If direct sign-in fails, try to decode the token and use the information
+              try {
+                // Decode the base64-encoded token (if it's in JWT format)
+                const tokenParts = idToken.split('.');
+                if (tokenParts.length === 3) {
+                  const payload = JSON.parse(atob(tokenParts[1]));
+                  console.log("Decoded token payload:", payload);
+                  
+                  // Use the email from the token to sign in
+                  if (payload.email) {
+                    console.log(`Attempting to sign in with email: ${payload.email}`);
+                    // This would require the user's password, which we don't have
+                    // Instead, redirect to the sign-in page with the email pre-filled
+                    window.location.href = `https://infoseccompliance.chat/signin.html?email=${encodeURIComponent(payload.email)}`;
+                  }
+                }
+              } catch (decodeError) {
+                console.error("Error decoding token:", decodeError);
+              }
             });
           
           return true;
         } catch (error) {
-          console.error("Error creating credential from token:", error);
+          console.error("Error with token authentication:", error);
           return false;
         }
       }
       
       return false;
     }
-
-    // Call this function in your initialization sequence
-    // Add this after firebase initialization but before checking auth state
-    const hasTokenInCookies = checkForIdTokenInCookies();
   </script>
 </body>
 </html>

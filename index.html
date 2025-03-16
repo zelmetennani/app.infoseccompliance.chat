@@ -743,7 +743,7 @@
         });
     }
 
-    // Update the token handling function to stay on the app page if auth fails
+    // Update the token handling function to use the correct authentication method
     function checkForIdTokenInCookies() {
       console.log("Checking for ID token in cookies");
       
@@ -767,16 +767,19 @@
           // Log the token length and format (without revealing the actual token)
           console.log(`Token found (length: ${idToken.length}, starts with: ${idToken.substring(0, 5)}...)`);
           
-          // Try a direct sign-in with the token using the correct method
-          firebase.auth().signInWithCustomToken(idToken)
+          // Create a credential from the ID token
+          const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+          
+          // Sign in with the credential
+          firebase.auth().signInWithCredential(credential)
             .then((userCredential) => {
-              console.log("Successfully signed in with custom token");
+              console.log("Successfully signed in with ID token credential");
               // Clear the cookie after use
               document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
             })
             .catch((error) => {
-              console.error("Error signing in with custom token:", error);
-              console.log("Custom token authentication failed, showing debug info");
+              console.error("Error signing in with credential:", error);
+              console.log("ID token authentication failed, showing debug info");
               
               // Show debug info instead of redirecting
               setTimeout(() => {

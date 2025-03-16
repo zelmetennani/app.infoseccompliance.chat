@@ -218,8 +218,9 @@
   <script>
     // Improved Firebase Authentication Initialization with Promise Chain
     document.addEventListener('DOMContentLoaded', function() {
-      console.log(`[${new Date().toISOString()}] DOM content loaded, starting Firebase initialization`);
-      initializeFirebaseWithPromises();
+      console.log("DOM content loaded, starting initialization sequence");
+      setupCrossDomainAuth();
+      loadFirebaseConfig();
     });
 
     // Global variables for auth state
@@ -230,120 +231,139 @@
     let authInitializationTimeout = null;
 
     // Initialize Firebase with proper promise chain
-    function initializeFirebaseWithPromises() {
-      console.log(`[${new Date().toISOString()}] Starting Firebase initialization sequence`);
+    function loadFirebaseConfig() {
+      console.log("Step 1: Loading Firebase configuration...");
       showAuthLoadingMessage("Initializing application...");
       
-      // Set a timeout to handle hung promises
-      authInitializationTimeout = setTimeout(() => {
-        if (!authInitialized) {
-          console.error(`[${new Date().toISOString()}] Firebase initialization timed out after 10 seconds`);
-          showAuthError("Initialization Timeout", "Firebase initialization did not complete in a reasonable time. Please refresh the page.");
-          // Force authInitialized to true to unblock the UI
-          authInitialized = true;
-        }
-      }, 10000); // 10 second timeout
-      
-      // Start the initialization promise chain
-      authInitializationPromise = Promise.resolve()
-        .then(() => {
-          console.log(`[${new Date().toISOString()}] Checking if Firebase SDK is loaded`);
+      try {
+        // Check if Firebase is already loaded
+        if (typeof firebase !== 'undefined') {
+          console.log("Step 2: Firebase SDK is loaded");
           
-          if (typeof firebase === 'undefined') {
-            throw new Error("Firebase SDK is not loaded");
-          }
-          
-          return Promise.resolve();
-        })
-        .then(() => {
-          console.log(`[${new Date().toISOString()}] Checking for Firebase config`);
-          
-          if (!window.firebaseConfig || !window.firebaseConfig.apiKey) {
-            return loadConfigScriptWithPromise();
-          }
-          
-          return Promise.resolve();
-        })
-        .then(() => {
-          console.log(`[${new Date().toISOString()}] Initializing Firebase with config`);
-          
-          if (!firebase.apps.length) {
-            firebase.initializeApp(window.firebaseConfig);
-            console.log(`[${new Date().toISOString()}] Firebase app initialized successfully`);
-          } else {
-            console.log(`[${new Date().toISOString()}] Using existing Firebase app`);
-          }
-          
-          return Promise.resolve();
-        })
-        .then(() => {
-          console.log(`[${new Date().toISOString()}] Setting Firebase persistence to SESSION`);
-          
-          return firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
-        })
-        .then(() => {
-          console.log(`[${new Date().toISOString()}] Firebase persistence set to SESSION successfully`);
-          
-          // Mark auth as initialized
-          authInitialized = true;
-          
-          // Clear the timeout since initialization completed successfully
-          if (authInitializationTimeout) {
-            clearTimeout(authInitializationTimeout);
-            authInitializationTimeout = null;
-          }
-          
-          // Set up auth state listener
-          return setupAuthStateListenerWithPromise();
-        })
-        .catch(error => {
-          console.error(`[${new Date().toISOString()}] Error in Firebase initialization:`, error);
-          showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
-          
-          // Mark auth as initialized even on error to unblock the UI
-          authInitialized = true;
-          
-          // Clear the timeout
-          if (authInitializationTimeout) {
-            clearTimeout(authInitializationTimeout);
-            authInitializationTimeout = null;
-          }
-          
-          return Promise.reject(error);
-        });
-      
-      return authInitializationPromise;
-    }
-
-    // Load config script with promise
-    function loadConfigScriptWithPromise() {
-      console.log(`[${new Date().toISOString()}] Loading config.js with promise`);
-      
-      return new Promise((resolve, reject) => {
-        const configScript = document.createElement('script');
-        configScript.src = 'config.js';
-        
-        configScript.onload = function() {
-          console.log(`[${new Date().toISOString()}] config.js loaded successfully`);
-          
+          // Check if we have a config file
           if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-            console.log(`[${new Date().toISOString()}] Firebase config found after loading config.js`);
-            resolve();
+            console.log("Step 3: Found Firebase config in window.firebaseConfig");
+            
+            // Initialize Firebase with the config
+            if (!firebase.apps.length) {
+              console.log("Step 4: Initializing Firebase with config");
+              firebase.initializeApp(window.firebaseConfig);
+              console.log("Step 4a: Firebase initialized successfully");
+            } else {
+              console.log("Step 4: Using existing Firebase app");
+            }
+            
+            // Set persistence to SESSION early in the process
+            console.log("Step 5: Setting Firebase persistence to SESSION");
+            firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+              .then(() => {
+                console.log("Step 6: Firebase persistence set to SESSION successfully");
+                authInitialized = true;
+                
+                // Check for token in URL
+                const hasToken = checkForTokenInUrl();
+                
+                // Add this right after Firebase initialization but before checking auth state
+                console.log("Checking for authentication token in cookies");
+                const hasTokenInCookies = checkForIdTokenInCookies();
+                
+                // Only proceed with normal auth check if no token was found
+                if (!hasTokenInCookies) {
+                  console.log("No token found in cookies, proceeding with normal auth check");
+                  // Add a deliberate delay before checking auth state
+                  console.log("Adding 2-second delay before checking auth state");
+                  setTimeout(() => {
+                    console.log("Delay complete, checking authentication state");
+                    checkAuthState();
+                  }, 2000);
+                }
+              })
+              .catch(error => {
+                console.error("Error setting persistence:", error);
+                showAuthError("Authentication Error", "Could not set up authentication persistence. Please try again.");
+                
+                // Even if there's an error, try to check auth state
+                setTimeout(() => {
+                  checkAuthState();
+                }, 2000);
+              });
           } else {
-            const error = new Error("Firebase config not found even after loading config.js");
-            console.error(`[${new Date().toISOString()}] ${error.message}`);
-            reject(error);
+            console.log("Step 3: No Firebase config found in window.firebaseConfig, loading from config.js");
+            
+            // Load the config.js file
+            const configScript = document.createElement('script');
+            configScript.src = 'config.js';
+            
+            configScript.onload = function() {
+              console.log("Step 3a: config.js loaded successfully");
+              
+              if (window.firebaseConfig && window.firebaseConfig.apiKey) {
+                console.log("Step 3b: Firebase config found after loading config.js");
+                
+                // Initialize Firebase with the config
+                if (!firebase.apps.length) {
+                  console.log("Step 4: Initializing Firebase with config from config.js");
+                  firebase.initializeApp(window.firebaseConfig);
+                  console.log("Step 4a: Firebase initialized successfully from config.js");
+                } else {
+                  console.log("Step 4: Using existing Firebase app");
+                }
+                
+                // Set persistence to SESSION
+                console.log("Step 5: Setting Firebase persistence to SESSION");
+                firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+                  .then(() => {
+                    console.log("Step 6: Firebase persistence set to SESSION successfully");
+                    authInitialized = true;
+                    
+                    // Check for token in URL
+                    const hasToken = checkForTokenInUrl();
+                    
+                    // Add this right after Firebase initialization but before checking auth state
+                    console.log("Checking for authentication token in cookies");
+                    const hasTokenInCookies = checkForIdTokenInCookies();
+                    
+                    // Only proceed with normal auth check if no token was found
+                    if (!hasTokenInCookies) {
+                      console.log("No token found in cookies, proceeding with normal auth check");
+                      // Add a deliberate delay before checking auth state
+                      console.log("Adding 2-second delay before checking auth state");
+                      setTimeout(() => {
+                        console.log("Delay complete, checking authentication state");
+                        checkAuthState();
+                      }, 2000);
+                    }
+                  })
+                  .catch(error => {
+                    console.error("Error setting persistence:", error);
+                    showAuthError("Authentication Error", "Could not set up authentication persistence. Please try again.");
+                    
+                    // Even if there's an error, try to check auth state
+                    setTimeout(() => {
+                      checkAuthState();
+                    }, 2000);
+                  });
+              } else {
+                console.error("Firebase config not found even after loading config.js");
+                showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
+              }
+            };
+            
+            configScript.onerror = function() {
+              console.error("Error loading config.js");
+              showAuthError("Configuration Error", "Could not load Firebase configuration. Please check your internet connection and try again.");
+            };
+            
+            document.head.appendChild(configScript);
           }
-        };
-        
-        configScript.onerror = function() {
-          const error = new Error("Could not load config.js");
-          console.error(`[${new Date().toISOString()}] ${error.message}`);
-          reject(error);
-        };
-        
-        document.head.appendChild(configScript);
-      });
+        } else {
+          console.error("Firebase SDK is not loaded");
+          showAuthError("Firebase SDK Missing", "Firebase SDK could not be loaded. Please check your internet connection and try again.");
+        }
+      } catch (error) {
+        console.error("Error in Firebase initialization:", error);
+        showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
+      }
     }
 
     // Set up auth state listener with promise
@@ -537,35 +557,6 @@
       document.cookie = "firebaseAuthEnabled=true; domain=.infoseccompliance.chat; path=/; SameSite=None; Secure";
       console.log("Set cross-domain cookie for authentication");
     }
-
-    // Call this function early in the initialization process
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log("DOM content loaded, starting initialization sequence");
-      setupCrossDomainAuth();
-      initializeFirebaseWithPromises();
-      
-      // Set up logout button
-      const logoutBtn = document.getElementById('logoutBtn');
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', function() {
-          firebase.auth().signOut().then(() => {
-            console.log("User signed out");
-            updateUIForUnauthenticatedUser();
-          }).catch((error) => {
-            console.error("Error signing out:", error);
-          });
-        });
-      }
-      
-      // Set up new chat button
-      const newChatBtn = document.getElementById('newChatBtn');
-      if (newChatBtn) {
-        newChatBtn.addEventListener('click', function() {
-          console.log("New chat requested");
-          // This would be implemented later
-        });
-      }
-    });
 
     // Helper functions for UI updates
     function showAuthLoadingMessage(message) {

@@ -216,7 +216,155 @@
   </div>
 
   <script>
-    // Add this function at the top of your script section
+    // Simplified Firebase Authentication Flow
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log("DOM content loaded, initializing Firebase");
+      initializeFirebase();
+    });
+
+    // Initialize Firebase once
+    function initializeFirebase() {
+      console.log("Initializing Firebase...");
+      showAuthLoadingMessage("Initializing application...");
+      
+      try {
+        // Check if Firebase SDK is loaded
+        if (typeof firebase === 'undefined') {
+          console.error("Firebase SDK is not loaded");
+          showAuthError("Firebase SDK Missing", "Firebase SDK could not be loaded. Please check your internet connection and try again.");
+          return;
+        }
+        
+        // Check if we have a config
+        if (!window.firebaseConfig || !window.firebaseConfig.apiKey) {
+          console.log("No Firebase config found, loading from config.js");
+          loadConfigScript();
+          return;
+        }
+        
+        // Initialize Firebase with the config
+        if (!firebase.apps.length) {
+          firebase.initializeApp(window.firebaseConfig);
+          console.log("Firebase initialized successfully");
+        } else {
+          console.log("Using existing Firebase app");
+        }
+        
+        // Set persistence to SESSION
+        firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+          .then(() => {
+            console.log("Firebase persistence set to SESSION successfully");
+            
+            // Set up ONE auth state listener that controls UI
+            setupAuthStateListener();
+          })
+          .catch(error => {
+            console.error("Error setting persistence:", error);
+            showAuthError("Authentication setup error", "Could not set up authentication persistence. Please try refreshing the page.");
+          });
+      } catch (error) {
+        console.error("Error in Firebase initialization:", error);
+        showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
+      }
+    }
+
+    // Load config script if needed
+    function loadConfigScript() {
+      console.log("Loading config.js...");
+      
+      const configScript = document.createElement('script');
+      configScript.src = 'config.js';
+      
+      configScript.onload = function() {
+        console.log("config.js loaded successfully");
+        
+        if (window.firebaseConfig && window.firebaseConfig.apiKey) {
+          console.log("Firebase config found after loading config.js");
+          initializeFirebase();
+        } else {
+          console.error("Firebase config not found even after loading config.js");
+          showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
+        }
+      };
+      
+      configScript.onerror = function() {
+        console.error("Error loading config.js");
+        showAuthError("Configuration Error", "Could not load Firebase configuration. Please check your internet connection and try again.");
+      };
+      
+      document.head.appendChild(configScript);
+    }
+
+    // Set up ONE auth state listener that controls UI
+    function setupAuthStateListener() {
+      console.log("Setting up auth state listener");
+      
+      firebase.auth().onAuthStateChanged((user) => {
+        console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
+        
+        if (user) {
+          console.log("User is signed in, updating UI for authenticated user");
+          updateUIForAuthenticatedUser(user);
+        } else {
+          console.log("User is not signed in, updating UI for unauthenticated state");
+          updateUIForUnauthenticatedUser();
+        }
+      });
+    }
+
+    // Update UI for authenticated user
+    function updateUIForAuthenticatedUser(user) {
+      console.log("Updating UI for authenticated user:", user.uid);
+      
+      // Update user profile display
+      document.getElementById('userName').textContent = user.displayName || 'User';
+      document.getElementById('userEmail').textContent = user.email || user.uid;
+      if (user.photoURL) {
+        document.getElementById('userProfilePic').src = user.photoURL;
+      }
+      
+      // Show welcome message
+      const chatMessages = document.getElementById('chatMessages');
+      if (chatMessages) {
+        chatMessages.innerHTML = `
+          <div class="message ai-message" style="background-color: #d4edda; color: #155724;">
+            <h4>Welcome, ${user.displayName || 'User'}!</h4>
+            <p>You are successfully signed in.</p>
+            <p>Start a new conversation or continue an existing one.</p>
+          </div>
+        `;
+      }
+      
+      // Enable chat functionality
+      enableChatFunctionality();
+    }
+
+    // Update UI for unauthenticated user
+    function updateUIForUnauthenticatedUser() {
+      console.log("Updating UI for unauthenticated state");
+      
+      // Show not authenticated message
+      const chatMessages = document.getElementById('chatMessages');
+      if (chatMessages) {
+        chatMessages.innerHTML = `
+          <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
+            <h4>Authentication Status</h4>
+            <p><strong>Not authenticated</strong></p>
+            <p>You are not currently signed in.</p>
+            <p><a href="https://infoseccompliance.chat/signin.html" class="btn btn-primary">Sign In</a></p>
+            <p><button onclick="showDebugInfo()" class="btn btn-secondary">Show Debug Info</button></p>
+            <div id="debug-info" style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
+              Debug info: Time: ${new Date().toISOString()}
+            </div>
+          </div>
+        `;
+      }
+      
+      // Disable chat functionality
+      disableChatFunctionality();
+    }
+
+    // Add this function to the top of your script section
     function parseJwt(token) {
       try {
         // Split the token and get the payload
@@ -300,288 +448,6 @@
     let authCheckComplete = false;
     let initialAuthCheckInProgress = true;
 
-    // Firebase Configuration with proper initialization sequence
-    function loadFirebaseConfig() {
-      console.log("Step 1: Loading Firebase configuration...");
-      showAuthLoadingMessage("Initializing application...");
-      
-      try {
-        // Check if Firebase is already loaded
-        if (typeof firebase !== 'undefined') {
-          console.log("Step 2: Firebase SDK is loaded");
-          
-          // Check if we have a config file
-          if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-            console.log("Step 3: Found Firebase config in window.firebaseConfig");
-            
-            // Initialize Firebase with the config
-            if (!firebase.apps.length) {
-              console.log("Step 4: Initializing Firebase with config");
-              firebase.initializeApp(window.firebaseConfig);
-              console.log("Step 4a: Firebase initialized successfully");
-            } else {
-              console.log("Step 4: Using existing Firebase app");
-            }
-            
-            // Set persistence to SESSION early in the process
-            console.log("Step 5: Setting Firebase persistence to SESSION");
-            firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-              .then(() => {
-                console.log("Step 6: Firebase persistence set to SESSION successfully");
-                authInitialized = true;
-                
-                // Check for token in URL first
-                const hasToken = checkForTokenInUrl();
-                
-                // Add this right after Firebase initialization but before checking auth state
-                console.log("Checking for authentication token in cookies");
-                const hasTokenInCookies = checkForIdTokenInCookies();
-                
-                // Only proceed with normal auth check if no token was found
-                if (!hasTokenInCookies) {
-                  console.log("No token found in cookies, proceeding with normal auth check");
-                  // Add a deliberate delay before checking auth state
-                  console.log("Adding 2-second delay before checking auth state");
-                  setTimeout(() => {
-                    console.log("Delay complete, checking authentication state");
-                    checkAuthState();
-                  }, 2000);
-                }
-              })
-              .catch(error => {
-                console.error("Error setting persistence:", error);
-                showAuthError("Authentication setup error", "Could not set up authentication persistence. Please try refreshing the page.");
-                authInitialized = true;
-                authCheckComplete = true;
-                initialAuthCheckInProgress = false;
-              });
-            
-            // Set up auth state listener
-            setupAuthStateListener();
-          } else {
-            // No config found, try to load it from config.js
-            console.log("Step 3: No Firebase config found in window.firebaseConfig, loading from config.js");
-            
-            // Create a script element to load config.js
-            const configScript = document.createElement('script');
-            configScript.src = 'config.js';
-            configScript.onload = function() {
-              console.log("Step 4: config.js loaded successfully");
-              
-              // Check if we now have a config
-              if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-                console.log("Step 5: Firebase config found after loading config.js");
-                
-                // Initialize Firebase with the config
-                if (!firebase.apps.length) {
-                  console.log("Step 6: Initializing Firebase with config");
-                  firebase.initializeApp(window.firebaseConfig);
-                  console.log("Step 6a: Firebase initialized successfully");
-                } else {
-                  console.log("Step 6: Using existing Firebase app");
-                }
-                
-                // Set persistence to SESSION
-                console.log("Step 7: Setting Firebase persistence to SESSION");
-                firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-                  .then(() => {
-                    console.log("Step 8: Firebase persistence set to SESSION successfully");
-                    authInitialized = true;
-                    
-                    // Check for token in URL first
-                    const hasToken = checkForTokenInUrl();
-                    
-                    // Add this right after Firebase initialization but before checking auth state
-                    console.log("Checking for authentication token in cookies");
-                    const hasTokenInCookies = checkForIdTokenInCookies();
-                    
-                    // Only proceed with normal auth check if no token was found
-                    if (!hasTokenInCookies) {
-                      console.log("No token found in cookies, proceeding with normal auth check");
-                      // Add a deliberate delay before checking auth state
-                      console.log("Adding 2-second delay before checking auth state");
-                      setTimeout(() => {
-                        console.log("Delay complete, checking authentication state");
-                        checkAuthState();
-                      }, 2000);
-                    }
-                  })
-                  .catch(error => {
-                    console.error("Error setting persistence:", error);
-                    showAuthError("Authentication setup error", "Could not set up authentication persistence. Please try refreshing the page.");
-                    authInitialized = true;
-                    authCheckComplete = true;
-                    initialAuthCheckInProgress = false;
-                  });
-                
-                // Set up auth state listener
-                setupAuthStateListener();
-              } else {
-                console.error("Step 5: Firebase config not found even after loading config.js");
-                showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
-                authInitialized = true;
-                authCheckComplete = true;
-                initialAuthCheckInProgress = false;
-              }
-            };
-            
-            configScript.onerror = function() {
-              console.error("Step 4: Error loading config.js");
-              showAuthError("Configuration Error", "Could not load Firebase configuration. Please check your internet connection and try again.");
-              authInitialized = true;
-              authCheckComplete = true;
-              initialAuthCheckInProgress = false;
-            };
-            
-            // Add the script to the document
-            document.head.appendChild(configScript);
-          }
-        } else {
-          console.error("Firebase SDK is not loaded");
-          showAuthError("Firebase SDK Missing", "Firebase SDK could not be loaded. Please check your internet connection and try again.");
-          authInitialized = true;
-          authCheckComplete = true;
-          initialAuthCheckInProgress = false;
-        }
-      } catch (error) {
-        console.error("Error in Firebase initialization:", error);
-        showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
-        authInitialized = true;
-        authCheckComplete = true;
-        initialAuthCheckInProgress = false;
-      }
-    }
-
-    // Set up auth state listener
-    function setupAuthStateListener() {
-      console.log("Setting up auth state listener");
-      
-      firebase.auth().onAuthStateChanged((user) => {
-        console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
-        
-        // Only process auth changes after initial check is complete
-        if (!initialAuthCheckInProgress) {
-          console.log("Processing auth state change (after initial check)");
-          updateUIForAuthState(user);
-        } else {
-          console.log("Ignoring auth state change (initial check still in progress)");
-        }
-      });
-    }
-
-    // Update the checkAuthState function to be more thorough
-    function checkAuthState() {
-      console.log("Checking authentication state...");
-      showAuthLoadingMessage("Verifying authentication...");
-      
-      // First check if we already have a user
-      const user = firebase.auth().currentUser;
-      console.log("Current user:", user ? `Found: ${user.uid}` : "None found");
-      
-      if (user) {
-        // We have a user, update UI and finish
-        console.log("User already authenticated, updating UI");
-        authCheckComplete = true;
-        initialAuthCheckInProgress = false;
-        updateUIForAuthState(user);
-        return;
-      }
-      
-      // No current user, check for ID token in cookies
-      console.log("No current user, checking for ID token in cookies");
-      
-      // Parse cookies
-      const cookies = document.cookie.split(';');
-      let hasIdTokenCookie = false;
-      
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.startsWith('firebaseIdToken=')) {
-          hasIdTokenCookie = true;
-          console.log("Found ID token cookie, authentication might be in progress");
-          break;
-        }
-      }
-      
-      if (hasIdTokenCookie) {
-        console.log("ID token cookie found, waiting longer for authentication to complete");
-        
-        // Add a longer delay to give the token authentication time to complete
-        setTimeout(() => {
-          // Check again after the delay
-          const userAfterDelay = firebase.auth().currentUser;
-          
-          if (userAfterDelay) {
-            console.log("User authenticated after delay, updating UI");
-            authCheckComplete = true;
-            initialAuthCheckInProgress = false;
-            updateUIForAuthState(userAfterDelay);
-          } else {
-            console.log("Still no user after delay, showing not authenticated state");
-            authCheckComplete = true;
-            initialAuthCheckInProgress = false;
-            updateUIForAuthState(null);
-          }
-        }, 5000); // Increased to 5 seconds for token processing
-      } else {
-        // No user and no token cookie, mark as not authenticated
-        console.log("No user and no token cookie, showing not authenticated state");
-        authCheckComplete = true;
-        initialAuthCheckInProgress = false;
-        updateUIForAuthState(null);
-      }
-    }
-
-    // Update UI based on authentication state
-    function updateUIForAuthState(user) {
-      if (user) {
-        console.log("Updating UI for authenticated user:", user.uid);
-        
-        // Update user profile display
-        document.getElementById('userName').textContent = user.displayName || 'User';
-        document.getElementById('userEmail').textContent = user.email || user.uid;
-        if (user.photoURL) {
-          document.getElementById('userProfilePic').src = user.photoURL;
-        }
-        
-        // Show welcome message
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-          chatMessages.innerHTML = `
-            <div class="message ai-message" style="background-color: #d4edda; color: #155724;">
-              <h4>Welcome, ${user.displayName || 'User'}!</h4>
-              <p>You are successfully signed in.</p>
-              <p>Start a new conversation or continue an existing one.</p>
-            </div>
-          `;
-        }
-        
-        // Enable chat functionality
-        enableChatFunctionality();
-      } else {
-        console.log("Updating UI for unauthenticated state");
-        
-        // Show not authenticated message
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-          chatMessages.innerHTML = `
-            <div class="message ai-message" style="background-color: #f8d7da; color: #721c24;">
-              <h4>Authentication Status</h4>
-              <p><strong>Not authenticated</strong></p>
-              <p>You are not currently signed in.</p>
-              <p><button onclick="showDebugInfo()" class="btn btn-secondary">Show Debug Info</button></p>
-              <div id="debug-info" style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
-                Debug info: Firebase initialized: ${authInitialized}, Auth check complete: ${authCheckComplete}, Time: ${new Date().toISOString()}
-              </div>
-            </div>
-          `;
-        }
-        
-        // Disable chat functionality
-        disableChatFunctionality();
-      }
-    }
-
     // Helper function to show errors
     function showError(title, message) {
       const chatMessages = document.getElementById('chatMessages');
@@ -608,7 +474,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       console.log("DOM content loaded, starting initialization sequence");
       setupCrossDomainAuth();
-      loadFirebaseConfig();
+      initializeFirebase();
       
       // Set up logout button
       const logoutBtn = document.getElementById('logoutBtn');
@@ -616,7 +482,7 @@
         logoutBtn.addEventListener('click', function() {
           firebase.auth().signOut().then(() => {
             console.log("User signed out");
-            updateUIForAuthState(null);
+            updateUIForUnauthenticatedUser();
           }).catch((error) => {
             console.error("Error signing out:", error);
           });

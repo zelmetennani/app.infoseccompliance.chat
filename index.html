@@ -216,99 +216,166 @@
   </div>
 
   <script>
-    // Simplified Firebase Authentication Flow
+    // Improved Firebase Authentication Initialization with Promise Chain
     document.addEventListener('DOMContentLoaded', function() {
-      console.log("DOM content loaded, initializing Firebase");
-      initializeFirebase();
+      console.log(`[${new Date().toISOString()}] DOM content loaded, starting Firebase initialization`);
+      initializeFirebaseWithPromises();
     });
 
-    // Initialize Firebase once
-    function initializeFirebase() {
-      console.log("Initializing Firebase...");
+    // Global variables for auth state
+    let authInitialized = false;
+    let authInitializationPromise = null;
+    let authStateListenerSet = false;
+    let authCheckComplete = false;
+    let authInitializationTimeout = null;
+
+    // Initialize Firebase with proper promise chain
+    function initializeFirebaseWithPromises() {
+      console.log(`[${new Date().toISOString()}] Starting Firebase initialization sequence`);
       showAuthLoadingMessage("Initializing application...");
       
-      try {
-        // Check if Firebase SDK is loaded
-        if (typeof firebase === 'undefined') {
-          console.error("Firebase SDK is not loaded");
-          showAuthError("Firebase SDK Missing", "Firebase SDK could not be loaded. Please check your internet connection and try again.");
+      // Set a timeout to handle hung promises
+      authInitializationTimeout = setTimeout(() => {
+        if (!authInitialized) {
+          console.error(`[${new Date().toISOString()}] Firebase initialization timed out after 10 seconds`);
+          showAuthError("Initialization Timeout", "Firebase initialization did not complete in a reasonable time. Please refresh the page.");
+          // Force authInitialized to true to unblock the UI
+          authInitialized = true;
+        }
+      }, 10000); // 10 second timeout
+      
+      // Start the initialization promise chain
+      authInitializationPromise = Promise.resolve()
+        .then(() => {
+          console.log(`[${new Date().toISOString()}] Checking if Firebase SDK is loaded`);
+          
+          if (typeof firebase === 'undefined') {
+            throw new Error("Firebase SDK is not loaded");
+          }
+          
+          return Promise.resolve();
+        })
+        .then(() => {
+          console.log(`[${new Date().toISOString()}] Checking for Firebase config`);
+          
+          if (!window.firebaseConfig || !window.firebaseConfig.apiKey) {
+            return loadConfigScriptWithPromise();
+          }
+          
+          return Promise.resolve();
+        })
+        .then(() => {
+          console.log(`[${new Date().toISOString()}] Initializing Firebase with config`);
+          
+          if (!firebase.apps.length) {
+            firebase.initializeApp(window.firebaseConfig);
+            console.log(`[${new Date().toISOString()}] Firebase app initialized successfully`);
+          } else {
+            console.log(`[${new Date().toISOString()}] Using existing Firebase app`);
+          }
+          
+          return Promise.resolve();
+        })
+        .then(() => {
+          console.log(`[${new Date().toISOString()}] Setting Firebase persistence to SESSION`);
+          
+          return firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
+        })
+        .then(() => {
+          console.log(`[${new Date().toISOString()}] Firebase persistence set to SESSION successfully`);
+          
+          // Mark auth as initialized
+          authInitialized = true;
+          
+          // Clear the timeout since initialization completed successfully
+          if (authInitializationTimeout) {
+            clearTimeout(authInitializationTimeout);
+            authInitializationTimeout = null;
+          }
+          
+          // Set up auth state listener
+          return setupAuthStateListenerWithPromise();
+        })
+        .catch(error => {
+          console.error(`[${new Date().toISOString()}] Error in Firebase initialization:`, error);
+          showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
+          
+          // Mark auth as initialized even on error to unblock the UI
+          authInitialized = true;
+          
+          // Clear the timeout
+          if (authInitializationTimeout) {
+            clearTimeout(authInitializationTimeout);
+            authInitializationTimeout = null;
+          }
+          
+          return Promise.reject(error);
+        });
+      
+      return authInitializationPromise;
+    }
+
+    // Load config script with promise
+    function loadConfigScriptWithPromise() {
+      console.log(`[${new Date().toISOString()}] Loading config.js with promise`);
+      
+      return new Promise((resolve, reject) => {
+        const configScript = document.createElement('script');
+        configScript.src = 'config.js';
+        
+        configScript.onload = function() {
+          console.log(`[${new Date().toISOString()}] config.js loaded successfully`);
+          
+          if (window.firebaseConfig && window.firebaseConfig.apiKey) {
+            console.log(`[${new Date().toISOString()}] Firebase config found after loading config.js`);
+            resolve();
+          } else {
+            const error = new Error("Firebase config not found even after loading config.js");
+            console.error(`[${new Date().toISOString()}] ${error.message}`);
+            reject(error);
+          }
+        };
+        
+        configScript.onerror = function() {
+          const error = new Error("Could not load config.js");
+          console.error(`[${new Date().toISOString()}] ${error.message}`);
+          reject(error);
+        };
+        
+        document.head.appendChild(configScript);
+      });
+    }
+
+    // Set up auth state listener with promise
+    function setupAuthStateListenerWithPromise() {
+      console.log(`[${new Date().toISOString()}] Setting up auth state listener with promise`);
+      
+      return new Promise((resolve) => {
+        if (authStateListenerSet) {
+          console.log(`[${new Date().toISOString()}] Auth state listener already set`);
+          resolve();
           return;
         }
         
-        // Check if we have a config
-        if (!window.firebaseConfig || !window.firebaseConfig.apiKey) {
-          console.log("No Firebase config found, loading from config.js");
-          loadConfigScript();
-          return;
-        }
+        // Set the auth state listener
+        firebase.auth().onAuthStateChanged((user) => {
+          console.log(`[${new Date().toISOString()}] Auth state changed:`, user ? `User detected: ${user.uid}` : "No user detected");
+          
+          // Mark auth check as complete
+          authCheckComplete = true;
+          
+          if (user) {
+            console.log(`[${new Date().toISOString()}] User is signed in, updating UI for authenticated user`);
+            updateUIForAuthenticatedUser(user);
+          } else {
+            console.log(`[${new Date().toISOString()}] User is not signed in, updating UI for unauthenticated state`);
+            updateUIForUnauthenticatedUser();
+          }
+        });
         
-        // Initialize Firebase with the config
-        if (!firebase.apps.length) {
-          firebase.initializeApp(window.firebaseConfig);
-          console.log("Firebase initialized successfully");
-        } else {
-          console.log("Using existing Firebase app");
-        }
-        
-        // Set persistence to SESSION
-        firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-          .then(() => {
-            console.log("Firebase persistence set to SESSION successfully");
-            
-            // Set up ONE auth state listener that controls UI
-            setupAuthStateListener();
-          })
-          .catch(error => {
-            console.error("Error setting persistence:", error);
-            showAuthError("Authentication setup error", "Could not set up authentication persistence. Please try refreshing the page.");
-          });
-      } catch (error) {
-        console.error("Error in Firebase initialization:", error);
-        showAuthError("Initialization Error", `Could not initialize Firebase: ${error.message}`);
-      }
-    }
-
-    // Load config script if needed
-    function loadConfigScript() {
-      console.log("Loading config.js...");
-      
-      const configScript = document.createElement('script');
-      configScript.src = 'config.js';
-      
-      configScript.onload = function() {
-        console.log("config.js loaded successfully");
-        
-        if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-          console.log("Firebase config found after loading config.js");
-          initializeFirebase();
-        } else {
-          console.error("Firebase config not found even after loading config.js");
-          showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
-        }
-      };
-      
-      configScript.onerror = function() {
-        console.error("Error loading config.js");
-        showAuthError("Configuration Error", "Could not load Firebase configuration. Please check your internet connection and try again.");
-      };
-      
-      document.head.appendChild(configScript);
-    }
-
-    // Set up ONE auth state listener that controls UI
-    function setupAuthStateListener() {
-      console.log("Setting up auth state listener");
-      
-      firebase.auth().onAuthStateChanged((user) => {
-        console.log("Auth state changed:", user ? `User detected: ${user.uid}` : "No user detected");
-        
-        if (user) {
-          console.log("User is signed in, updating UI for authenticated user");
-          updateUIForAuthenticatedUser(user);
-        } else {
-          console.log("User is not signed in, updating UI for unauthenticated state");
-          updateUIForUnauthenticatedUser();
-        }
+        authStateListenerSet = true;
+        console.log(`[${new Date().toISOString()}] Auth state listener set successfully`);
+        resolve();
       });
     }
 
@@ -474,7 +541,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       console.log("DOM content loaded, starting initialization sequence");
       setupCrossDomainAuth();
-      initializeFirebase();
+      initializeFirebaseWithPromises();
       
       // Set up logout button
       const logoutBtn = document.getElementById('logoutBtn');

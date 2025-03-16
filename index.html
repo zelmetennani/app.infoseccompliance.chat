@@ -365,9 +365,12 @@
           authCheckComplete = true;
           
           if (user) {
+            console.log(`[${new Date().toISOString()}] ✅ AUTHENTICATION SUCCESSFUL ✅`);
+            console.log(`[${new Date().toISOString()}] User details: Email: ${user.email || 'N/A'}, Name: ${user.displayName || 'N/A'}, UID: ${user.uid}`);
             console.log(`[${new Date().toISOString()}] User is signed in, updating UI for authenticated user`);
             updateUIForAuthenticatedUser(user);
           } else {
+            console.log(`[${new Date().toISOString()}] ❌ AUTHENTICATION FAILED OR NOT SIGNED IN ❌`);
             console.log(`[${new Date().toISOString()}] User is not signed in, updating UI for unauthenticated state`);
             updateUIForUnauthenticatedUser();
           }

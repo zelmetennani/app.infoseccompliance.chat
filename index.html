@@ -743,7 +743,7 @@
         });
     }
 
-    // Update the token handling function to use the correct authentication method
+    // Update the token handling function to decode and use the token directly
     function checkForIdTokenInCookies() {
       console.log("Checking for ID token in cookies");
       
@@ -761,42 +761,86 @@
       }
       
       if (idToken) {
-        console.log("Found ID token, attempting to sign in");
+        console.log("Found ID token, attempting to decode and use it directly");
         
         try {
           // Log the token length and format (without revealing the actual token)
           console.log(`Token found (length: ${idToken.length}, starts with: ${idToken.substring(0, 5)}...)`);
           
-          // Create a credential from the ID token
-          const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+          // Decode the JWT token
+          const tokenParts = idToken.split('.');
+          if (tokenParts.length !== 3) {
+            throw new Error("Invalid token format - not a valid JWT");
+          }
           
-          // Sign in with the credential
-          firebase.auth().signInWithCredential(credential)
-            .then((userCredential) => {
-              console.log("Successfully signed in with ID token credential");
-              // Clear the cookie after use
-              document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
-            })
-            .catch((error) => {
-              console.error("Error signing in with credential:", error);
-              console.log("ID token authentication failed, showing debug info");
-              
-              // Show debug info instead of redirecting
-              setTimeout(() => {
-                console.log("Showing debug info after auth failure");
-                showAuthError("Authentication Error", `Could not authenticate with token: ${error.message}`);
-                showDebugInfo();
-              }, 1000);
+          // Decode the payload (middle part of the JWT)
+          const payload = JSON.parse(atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          console.log("Successfully decoded token payload:", payload);
+          
+          // Check if the token is expired
+          const currentTime = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp < currentTime) {
+            console.error("Token is expired", {
+              expiration: new Date(payload.exp * 1000).toISOString(),
+              currentTime: new Date(currentTime * 1000).toISOString()
             });
+            
+            // Clear the expired token
+            document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
+            
+            // Show error about expired token
+            showAuthError("Authentication Error", "Your authentication token has expired. Please sign in again.");
+            return false;
+          }
+          
+          // Create a user object from the token payload
+          const user = {
+            uid: payload.user_id || payload.sub,
+            email: payload.email || 'No email in token',
+            displayName: payload.name || payload.email?.split('@')[0] || 'User',
+            emailVerified: payload.email_verified || false,
+            // Add a photoURL if available
+            photoURL: payload.picture || null,
+            // Add token-specific fields
+            tokenIssuer: payload.iss,
+            tokenAudience: payload.aud,
+            tokenIssuedAt: payload.iat ? new Date(payload.iat * 1000).toISOString() : null,
+            tokenExpiration: payload.exp ? new Date(payload.exp * 1000).toISOString() : null,
+            // Add metadata for compatibility
+            metadata: {
+              lastSignInTime: payload.auth_time ? new Date(payload.auth_time * 1000).toISOString() : new Date().toISOString()
+            },
+            // Add provider data for compatibility
+            providerData: [{
+              providerId: 'firebase',
+              uid: payload.user_id || payload.sub,
+              displayName: payload.name || payload.email?.split('@')[0] || 'User',
+              email: payload.email || 'No email in token',
+              photoURL: payload.picture || null
+            }]
+          };
+          
+          console.log("Created user object from token:", user);
+          
+          // Update UI with the user information
+          console.log("Updating UI with user information from token");
+          updateUIForAuthenticatedUser(user);
+          
+          // Show auth status indicator
+          showAuthStatusIndicator(true, user);
+          
+          // Log success
+          console.log(`[${new Date().toISOString()}] ✅ AUTHENTICATION SUCCESSFUL (via token) ✅`);
+          console.log(`[${new Date().toISOString()}] User details from token: Email: ${user.email}, Name: ${user.displayName}, UID: ${user.uid}`);
           
           return true;
         } catch (error) {
-          console.error("Error with token authentication:", error);
+          console.error("Error decoding or using token:", error);
           
           // Show debug info instead of redirecting
           setTimeout(() => {
-            console.log("Showing debug info after auth error");
-            showAuthError("Authentication Error", `Error processing authentication token: ${error.message}`);
+            console.log("Showing debug info after token processing error");
+            showAuthError("Token Processing Error", `Could not process authentication token: ${error.message}`);
             showDebugInfo();
           }, 1000);
           
@@ -804,6 +848,7 @@
         }
       }
       
+      console.log("No ID token found in cookies");
       return false;
     }
 

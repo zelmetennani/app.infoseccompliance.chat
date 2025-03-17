@@ -6,6 +6,7 @@
   <title>InfoSec Compliance Chat</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -40,31 +41,44 @@
     .chat-messages {
       flex-grow: 1;
       overflow-y: auto;
-      padding: 20px;
-      background-color: #f8f9fa;
+      padding: 1.5rem;
+      margin-bottom: 80px; /* Add space for the input box */
     }
     
     .message {
-      margin-bottom: 15px;
-      padding: 10px 15px;
-      border-radius: 10px;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
       max-width: 80%;
-      word-wrap: break-word;
     }
     
     .user-message {
-      background-color: #d1ecf1;
+      background-color: #007bff;
+      color: white;
       margin-left: auto;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
     
     .ai-message {
-      background-color: #e2e3e5;
+      background-color: #f8f9fa;
+      color: #212529;
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
     
     .chat-input {
-      padding: 15px;
-      background-color: #fff;
-      border-top: 1px solid #dee2e6;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 800px;
+      padding: 15px 20px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 100;
     }
     
     .nav-link.active {
@@ -86,12 +100,8 @@
     
     /* Typing indicator */
     .typing-indicator {
-      display: inline-flex;
-      align-items: center;
-      padding: 10px 15px;
-      border-radius: 10px;
-      background-color: #e2e3e5;
-      margin-bottom: 15px;
+      display: flex;
+      padding: 0.5rem 1rem;
     }
     
     .typing-indicator span {
@@ -119,17 +129,33 @@
     }
     
     /* Conversation list */
-    .conversation-item {
-      cursor: pointer;
-      transition: background-color 0.2s;
+    .chat-history {
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
     }
     
-    .conversation-item:hover {
-      background-color: #f0f0f0;
+    .list-group-item-action {
+      border-radius: 8px !important;
+      margin-bottom: 8px;
+      border: 1px solid rgba(0,0,0,.125);
     }
     
-    .conversation-item.active {
+    .list-group-item-action.active {
+      background-color: #f8f9fa;
+      color: #212529;
+      border-color: #dee2e6;
+      border-left: 3px solid #007bff;
+    }
+    
+    .list-group-item-action:hover {
       background-color: #e9ecef;
+    }
+    
+    /* New chat button */
+    #newChatBtn {
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.85rem;
     }
     
     /* Responsive adjustments */
@@ -148,6 +174,22 @@
         max-width: 90%;
       }
     }
+    
+    /* Header styling */
+    .chat-header {
+      background-color: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .chat-header .nav-link {
+      color: #495057;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    
+    .chat-header .nav-link:hover {
+      color: #007bff;
+    }
   </style>
 </head>
 <body>
@@ -155,59 +197,108 @@
   <div id="app-container" class="container-fluid">
     <div class="row">
       <!-- Sidebar -->
-      <div class="col-md-3 col-lg-2 sidebar">
-        <h4 class="mb-4">InfoSec Compliance</h4>
-        
-        <!-- Navigation -->
-        <div class="mb-4">
-          <div class="nav flex-column nav-pills">
-            <a class="nav-link active" href="#chat">Chat</a>
-            <a class="nav-link" href="#" id="newChatBtn">New Chat</a>
+      <div class="col-md-3 col-lg-2 d-md-block d-none d-md-block bg-light sidebar">
+        <div class="position-sticky pt-3">
+          <div class="d-flex justify-content-between align-items-center mb-3 px-3">
+            <h5 class="m-0">Chats</h5>
+            <button id="newChatBtn" class="btn btn-sm btn-primary">
+              <i class="bi bi-plus-circle"></i> New Chat
+            </button>
           </div>
-        </div>
-        
-        <!-- Chat history -->
-        <div class="mb-4 flex-grow-1 overflow-auto">
-          <h6>Recent Conversations</h6>
-          <div class="list-group" id="conversationList">
-            <!-- Conversations will be loaded here -->
-          </div>
-        </div>
-        
-        <!-- User profile and logout -->
-        <div class="mt-auto">
-          <div class="d-flex align-items-center mb-3">
-            <div class="me-2">
-              <img id="userProfilePic" src="https://via.placeholder.com/40" class="rounded-circle" alt="Profile">
+          <div id="chatHistory" class="chat-history px-2">
+            <!-- Chat history will be populated here -->
+            <div class="list-group">
+              <a href="#" class="list-group-item list-group-item-action active">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">GDPR Compliance Questions</h6>
+                  <small>3d ago</small>
+                </div>
+                <small>Last message: What are the key requirements...</small>
+              </a>
+              <a href="#" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">ISO 27001 Implementation</h6>
+                  <small>1w ago</small>
+                </div>
+                <small>Last message: How do I prepare for an audit...</small>
+              </a>
+              <a href="#" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">HIPAA Security Rule</h6>
+                  <small>2w ago</small>
+                </div>
+                <small>Last message: What technical safeguards...</small>
+              </a>
             </div>
-            <div>
-              <div class="fw-bold" id="userName">User Name</div>
-              <small class="text-muted" id="userEmail">user@example.com</small>
-            </div>
           </div>
-          <button id="logoutBtn" class="btn btn-outline-danger w-100">Logout</button>
         </div>
       </div>
       
       <!-- Main content area -->
       <div class="col-md-9 col-lg-10 chat-container">
         <!-- Chat header -->
-        <div class="p-3 border-bottom">
-          <h5>InfoSec Compliance Assistant</h5>
-          <p class="text-muted mb-0">Ask questions about security compliance, regulations, and best practices</p>
+        <div class="chat-header d-flex justify-content-between align-items-center p-3 border-bottom">
+          <div class="d-flex align-items-center">
+            <!-- Sidebar toggle for mobile -->
+            <button class="btn btn-sm btn-outline-secondary d-md-none me-3" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-expanded="false" aria-controls="sidebar">
+              <i class="bi bi-list"></i>
+            </button>
+            
+            <!-- Logo/Brand -->
+            <h1 class="h5 mb-0 me-4">Infosec Compliance Chat</h1>
+          </div>
+          
+          <!-- Navigation elements -->
+          <div class="d-flex align-items-center">
+            <!-- Docs tab -->
+            <a href="#" class="nav-link px-3">Docs</a>
+            
+            <!-- Help tab -->
+            <a href="#" class="nav-link px-3">Help</a>
+            
+            <!-- Home button -->
+            <a href="#" class="nav-link px-3">
+              <i class="bi bi-house-door"></i>
+            </a>
+            
+            <!-- User profile dropdown (rightmost) -->
+            <div class="dropdown ms-2">
+              <button class="btn btn-link dropdown-toggle p-0" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <img id="userProfilePic" src="https://via.placeholder.com/32" alt="User Profile" class="rounded-circle" width="32" height="32">
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                <li class="dropdown-item-text">
+                  <div class="d-flex flex-column">
+                    <strong id="userName">User</strong>
+                    <small id="userEmail" class="text-muted">user@example.com</small>
+                  </div>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#">Profile Settings</a></li>
+                <li><a class="dropdown-item" href="#">Account Settings</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><button id="logoutBtn" class="dropdown-item text-danger">Sign Out</button></li>
+              </ul>
+            </div>
+          </div>
         </div>
         
         <!-- Chat messages -->
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be added here dynamically -->
+          <div class="message ai-message">
+            <p>Hello! I'm your InfoSec Compliance Assistant. How can I help you today?</p>
+          </div>
         </div>
         
         <!-- Chat input -->
         <div class="chat-input">
           <form id="chatForm">
             <div class="input-group">
-              <input type="text" id="messageInput" class="form-control" placeholder="Type your message here...">
-              <button class="btn btn-primary" type="submit">Send</button>
+              <input type="text" id="messageInput" class="form-control" placeholder="Ask about information security compliance...">
+              <button class="btn btn-primary" type="submit">
+                <i class="bi bi-send"></i> Send
+              </button>
             </div>
           </form>
         </div>
@@ -245,7 +336,7 @@
             console.log("Step 3: Found Firebase config in window.firebaseConfig");
             
             // Initialize Firebase with the config
-            if (!firebase.apps.length) {
+      if (!firebase.apps.length) {
               console.log("Step 4: Initializing Firebase with config");
               firebase.initializeApp(window.firebaseConfig);
               console.log("Step 4a: Firebase initialized successfully");
@@ -305,8 +396,8 @@
                     // Add this right after Firebase initialization but before checking auth state
                     console.log("Checking for authentication token in cookies");
                     const hasTokenInCookies = checkForIdTokenInCookies();
-                  })
-                  .catch(error => {
+                })
+                .catch(error => {
                     console.error("Error setting persistence:", error);
                     showAuthError("Authentication Error", "Could not set up authentication persistence. Please try again.");
                     
@@ -314,8 +405,8 @@
                     setTimeout(() => {
                       checkAuthState();
                     }, 2000);
-                  });
-              } else {
+                });
+            } else {
                 console.error("Firebase config not found even after loading config.js");
                 showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
               }
@@ -346,9 +437,9 @@
         if (authStateListenerSet) {
           console.log(`[${new Date().toISOString()}] Auth state listener already set`);
           resolve();
-          return;
-        }
-        
+              return;
+            }
+            
         // Set the auth state listener
         firebase.auth().onAuthStateChanged((user) => {
           console.log(`[${new Date().toISOString()}] Auth state changed:`, user ? `User detected: ${user.uid}` : "No user detected");
@@ -889,7 +980,7 @@ Authentication Details:
         };
         statusIndicator.style.cursor = 'pointer';
         statusIndicator.title = 'Click for more details';
-      } else {
+          } else {
         // Show not authenticated status
         statusIndicator.style.backgroundColor = '#f8d7da';
         statusIndicator.style.color = '#721c24';

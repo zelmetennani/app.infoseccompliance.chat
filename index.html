@@ -190,6 +190,37 @@
     .chat-header .nav-link:hover {
       color: #007bff;
     }
+    
+    /* User dropdown styling */
+    .dropdown-menu {
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border: 1px solid #eaeaea;
+      padding: 8px 0;
+    }
+    
+    .dropdown-item {
+      color: #495057;
+      transition: background-color 0.2s;
+    }
+    
+    .dropdown-item:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .dropdown-item i {
+      color: #6c757d;
+      width: 20px;
+      text-align: center;
+    }
+    
+    #logoutBtn {
+      color: #dc3545;
+    }
+    
+    #logoutBtn i {
+      color: #dc3545;
+    }
   </style>
 </head>
 <body>
@@ -267,17 +298,29 @@
                 <img id="userProfilePic" src="https://via.placeholder.com/32" alt="User Profile" class="rounded-circle" width="32" height="32">
               </button>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                <li class="dropdown-item-text">
+                <li class="dropdown-item-text py-2">
                   <div class="d-flex flex-column">
                     <strong id="userName">User</strong>
                     <small id="userEmail" class="text-muted">user@example.com</small>
                   </div>
                 </li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#">Profile Settings</a></li>
-                <li><a class="dropdown-item" href="#">Account Settings</a></li>
+                <li>
+                  <a class="dropdown-item py-2" href="#">
+                    <i class="bi bi-gear me-2"></i> Settings
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item py-2" href="#">
+                    <i class="bi bi-arrow-up-circle me-2"></i> Upgrade
+                  </a>
+                </li>
                 <li><hr class="dropdown-divider"></li>
-                <li><button id="logoutBtn" class="dropdown-item text-danger">Sign Out</button></li>
+                <li>
+                  <button id="logoutBtn" class="dropdown-item py-2">
+                    <i class="bi bi-box-arrow-right me-2"></i> Logout
+                  </button>
+                </li>
               </ul>
             </div>
           </div>

@@ -357,14 +357,22 @@
         document.getElementById('userProfilePic').src = user.photoURL;
       }
       
-      // Show welcome message
+      // Replace with a more comprehensive welcome message
       const chatMessages = document.getElementById('chatMessages');
       if (chatMessages) {
         chatMessages.innerHTML = `
-          <div class="message ai-message" style="background-color: #d4edda; color: #155724;">
-            <h4>Welcome, ${user.displayName || 'User'}!</h4>
-            <p>You are successfully signed in.</p>
-            <p>Start a new conversation or continue an existing one.</p>
+          <div class="message ai-message">
+            <p>Welcome to InfoSec Compliance Chat! I'm an AI assistant specialized in information security, compliance frameworks, and cybersecurity best practices.</p>
+            <p>I can help with questions about:</p>
+            <ul>
+              <li>GDPR, HIPAA, SOC 2, ISO 27001, and other compliance frameworks</li>
+              <li>Security policies and procedures</li>
+              <li>Risk assessment and management</li>
+              <li>Data protection strategies</li>
+              <li>Security incident response</li>
+            </ul>
+            <p><em>Please note that while I strive for accuracy, my responses should be verified against official documentation and may not reflect the most recent regulatory changes. I'm here to assist, not to provide legal advice.</em></p>
+            <p>How can I help you today?</p>
           </div>
         `;
       }

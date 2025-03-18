@@ -879,11 +879,11 @@
     // Function to send message to LLM API
     async function sendMessageToLLM(message) {
       try {
-        // Get API key from environment variable
-        const apiKey = process.env.VITE_LLM_API_KEY || '';
+        // In Netlify, we can use a hardcoded API key that gets replaced during build
+        const apiKey = '{{ VITE_LLM_API_KEY }}';
         
-        if (!apiKey) {
-          console.error("API key not found in environment variables");
+        if (!apiKey || apiKey === '{{ VITE_LLM_API_KEY }}') {
+          console.error("API key not found or not replaced during build");
           throw new Error("API configuration error. Please contact support.");
         }
         

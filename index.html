@@ -879,11 +879,11 @@
     // Function to send message to LLM API
     async function sendMessageToLLM(message) {
       try {
-        // Get API key from Netlify injected environment variable
-        const apiKey = process.env.VITE_LLM_API_KEY || '';
+        // For browser environments, we use a hardcoded API key that gets replaced during build
+        const apiKey = 'ANTHROPIC_API_KEY_PLACEHOLDER';
         
-        if (!apiKey) {
-          console.error("API key not found in environment variables");
+        if (!apiKey || apiKey === 'ANTHROPIC_API_KEY_PLACEHOLDER') {
+          console.error("API key not found or not replaced during build");
           throw new Error("API configuration error. Please contact support.");
         }
         
@@ -916,7 +916,6 @@
         const data = await response.json();
         
         // Return the AI response text from Claude's response format
-        // The correct path is data.content[0].text
         return data.content[0].text;
         
       } catch (error) {

@@ -97,7 +97,7 @@
             <!-- User profile dropdown (rightmost) -->
             <div class="dropdown ms-2">
               <button class="btn btn-link dropdown-toggle p-0" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                <img id="userProfilePic" src="https://via.placeholder.com/32" alt="User Profile" class="rounded-circle" width="32" height="32">
+                <img id="userProfilePic" src="https://via.placeholder.com/32" alt="User" class="rounded-circle" width="32" height="32">
               </button>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                 <li class="dropdown-item-text py-2">
@@ -879,11 +879,11 @@
     // Function to send message to LLM API
     async function sendMessageToLLM(message) {
       try {
-        // In Netlify, we can use a hardcoded API key that gets replaced during build
-        const apiKey = '{{ VITE_LLM_API_KEY }}';
+        // Get API key from Netlify injected environment variable
+        const apiKey = process.env.VITE_LLM_API_KEY || '';
         
-        if (!apiKey || apiKey === '{{ VITE_LLM_API_KEY }}') {
-          console.error("API key not found or not replaced during build");
+        if (!apiKey) {
+          console.error("API key not found in environment variables");
           throw new Error("API configuration error. Please contact support.");
         }
         
@@ -893,10 +893,10 @@
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01' // This is still the current version as of now
+            'anthropic-version': '2023-06-01'
           },
           body: JSON.stringify({
-            model: "claude-3-sonnet-20240229", // Current model as of this implementation
+            model: "claude-3-sonnet-20240229",
             max_tokens: 1000,
             messages: [
               {

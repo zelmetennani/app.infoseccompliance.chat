@@ -7,6 +7,8 @@
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <!-- Bootstrap JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -360,6 +362,30 @@
       const existingIndicator = document.getElementById('auth-status-indicator');
       if (existingIndicator) {
         existingIndicator.remove();
+      }
+      
+      // Set up logout button functionality
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+          console.log("Logout button clicked");
+          
+          // Clear the auth token cookie
+          document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
+          
+          // Sign out from Firebase
+          firebase.auth().signOut()
+            .then(() => {
+              console.log("Successfully signed out");
+              // Redirect to sign-in page
+              window.location.href = "https://infoseccompliance.chat/signin.html";
+            })
+            .catch((error) => {
+              console.error("Error signing out:", error);
+              // Still redirect to sign-in page even if there's an error
+              window.location.href = "https://infoseccompliance.chat/signin.html";
+            });
+        });
       }
     });
 

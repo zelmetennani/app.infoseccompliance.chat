@@ -154,7 +154,6 @@
   <script>
     // Improved Firebase Authentication Initialization with Promise Chain
     document.addEventListener('DOMContentLoaded', function() {
-      console.log("DOM content loaded, starting initialization sequence");
       setupCrossDomainAuth();
       loadFirebaseConfig();
       
@@ -168,20 +167,16 @@
       const logoutBtn = document.getElementById('logoutBtn');
       if (logoutBtn) {
         logoutBtn.addEventListener('click', function() {
-          console.log("Logout button clicked");
-          
           // Clear the auth token cookie
           document.cookie = "firebaseIdToken=; domain=.infoseccompliance.chat; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=None; Secure";
           
           // Sign out from Firebase
           firebase.auth().signOut()
             .then(() => {
-              console.log("Successfully signed out");
               // Redirect to sign-in page
               window.location.href = "https://infoseccompliance.chat/signin.html";
             })
             .catch((error) => {
-              console.error("Error signing out:", error);
               // Still redirect to sign-in page even if there's an error
               window.location.href = "https://infoseccompliance.chat/signin.html";
             });
@@ -201,36 +196,26 @@
 
     // Initialize Firebase with proper promise chain
     function loadFirebaseConfig() {
-      console.log("Step 1: Loading Firebase configuration...");
       showAuthLoadingMessage("Initializing application...");
       
       try {
         // Check if Firebase is already loaded
         if (typeof firebase !== 'undefined') {
-          console.log("Step 2: Firebase SDK is loaded");
           
           // Check if we have a config file
           if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-            console.log("Step 3: Found Firebase config in window.firebaseConfig");
             
             // Initialize Firebase with the config
-      if (!firebase.apps.length) {
-              console.log("Step 4: Initializing Firebase with config");
+            if (!firebase.apps.length) {
               firebase.initializeApp(window.firebaseConfig);
-              console.log("Step 4a: Firebase initialized successfully");
-            } else {
-              console.log("Step 4: Using existing Firebase app");
             }
             
             // Set persistence to SESSION early in the process
-            console.log("Step 5: Setting Firebase persistence to SESSION");
             firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
               .then(() => {
-                console.log("Step 6: Firebase persistence set to SESSION successfully");
                 authInitialized = true;
                 
                 // Add this right after Firebase initialization but before checking auth state
-                console.log("Checking for authentication token in cookies");
                 const hasTokenInCookies = checkForIdTokenInCookies();
               })
               .catch(error => {
@@ -243,36 +228,26 @@
                 }, 2000);
               });
           } else {
-            console.log("Step 3: No Firebase config found in window.firebaseConfig, loading from config.js");
             
             // Load the config.js file
             const configScript = document.createElement('script');
             configScript.src = 'config.js';
             
             configScript.onload = function() {
-              console.log("Step 3a: config.js loaded successfully");
               
               if (window.firebaseConfig && window.firebaseConfig.apiKey) {
-                console.log("Step 3b: Firebase config found after loading config.js");
                 
                 // Initialize Firebase with the config
                 if (!firebase.apps.length) {
-                  console.log("Step 4: Initializing Firebase with config from config.js");
                   firebase.initializeApp(window.firebaseConfig);
-                  console.log("Step 4a: Firebase initialized successfully from config.js");
-                } else {
-                  console.log("Step 4: Using existing Firebase app");
                 }
                 
                 // Set persistence to SESSION
-                console.log("Step 5: Setting Firebase persistence to SESSION");
                 firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
                   .then(() => {
-                    console.log("Step 6: Firebase persistence set to SESSION successfully");
                     authInitialized = true;
                     
                     // Add this right after Firebase initialization but before checking auth state
-                    console.log("Checking for authentication token in cookies");
                     const hasTokenInCookies = checkForIdTokenInCookies();
                 })
                 .catch(error => {
@@ -309,19 +284,14 @@
 
     // Set up auth state listener with promise
     function setupAuthStateListenerWithPromise() {
-      console.log(`[${new Date().toISOString()}] Setting up auth state listener with promise`);
-      
       return new Promise((resolve) => {
         if (authStateListenerSet) {
-          console.log(`[${new Date().toISOString()}] Auth state listener already set`);
           resolve();
               return;
             }
             
         // Set the auth state listener
         firebase.auth().onAuthStateChanged((user) => {
-          console.log(`[${new Date().toISOString()}] Auth state changed:`, user ? `User detected: ${user.uid}` : "No user detected");
-          
           // Mark auth check as complete
           authCheckComplete = true;
           
@@ -329,27 +299,19 @@
           showAuthStatusIndicator(!!user, user);
           
           if (user) {
-            console.log(`[${new Date().toISOString()}] ✅ AUTHENTICATION SUCCESSFUL ✅`);
-            console.log(`[${new Date().toISOString()}] User details: Email: ${user.email || 'N/A'}, Name: ${user.displayName || 'N/A'}, UID: ${user.uid}`);
-            console.log(`[${new Date().toISOString()}] User is signed in, updating UI for authenticated user`);
             updateUIForAuthenticatedUser(user);
           } else {
-            console.log(`[${new Date().toISOString()}] ❌ AUTHENTICATION FAILED OR NOT SIGNED IN ❌`);
-            console.log(`[${new Date().toISOString()}] User is not signed in, updating UI for unauthenticated state`);
             updateUIForUnauthenticatedUser();
           }
         });
         
         authStateListenerSet = true;
-        console.log(`[${new Date().toISOString()}] Auth state listener set successfully`);
         resolve();
       });
     }
 
     // Update UI for authenticated user
     function updateUIForAuthenticatedUser(user) {
-      console.log("Updating UI for authenticated user:", user.uid);
-      
       // Update user profile display
       document.getElementById('userName').textContent = user.displayName || 'User';
       document.getElementById('userEmail').textContent = user.email || user.uid;
@@ -383,8 +345,6 @@
 
     // Update UI for unauthenticated user
     function updateUIForUnauthenticatedUser() {
-      console.log("Updating UI for unauthenticated state");
-      
       // Show not authenticated message
       const chatMessages = document.getElementById('chatMessages');
       if (chatMessages) {
@@ -410,7 +370,6 @@
     function setupCrossDomainAuth() {
       // Set a cookie on the .infoseccompliance.chat domain to enable sharing
       document.cookie = "firebaseAuthEnabled=true; domain=.infoseccompliance.chat; path=/; SameSite=None; Secure";
-      console.log("Set cross-domain cookie for authentication");
     }
 
     // Helper functions for UI updates
@@ -497,8 +456,6 @@
             </div>
           </div>
         `;
-        
-        console.log("Full debug info:", debugInfo);
       }
     }
 
@@ -536,8 +493,6 @@
 
     // Add this enhanced showDebugInfo function
     function showDebugInfo() {
-      console.log("Showing detailed debug info");
-      
       // Check cookies and localStorage with more detail
       const cookies = inspectCookiesForDebug();
       const storage = inspectStorageForDebug();
@@ -547,16 +502,11 @@
       const user = auth.currentUser;
       
       // Log Firebase auth cookies specifically
-      console.log("Checking for Firebase auth cookies:");
       document.cookie.split(';').forEach(cookie => {
         const trimmedCookie = cookie.trim();
         if (trimmedCookie.includes('firebase') || trimmedCookie.includes('auth')) {
-          console.log("Found auth-related cookie:", trimmedCookie.split('=')[0]);
         }
       });
-      
-      // Check if we're using the correct auth domain
-      console.log("Firebase auth domain:", firebase.app().options.authDomain);
       
       // Prepare debug info
       const debugInfo = {
@@ -605,8 +555,6 @@
           <button onclick="testAuthConnection()" class="btn btn-sm btn-info mt-2">Test Auth Connection</button>
         `;
       }
-      
-      console.log("Debug info:", debugInfo);
     }
 
     // Helper function to inspect cookies for debugging
@@ -673,7 +621,6 @@
 
     // Add a function to test auth connection
     function testAuthConnection() {
-      console.log("Testing auth connection...");
       const debugElement = document.getElementById('debug-info');
       
       if (debugElement) {
@@ -722,8 +669,6 @@
 
     // Update the token handling function to decode and use the token directly
     function checkForIdTokenInCookies() {
-      console.log("Checking for ID token in cookies");
-      
       // Parse cookies
       const cookies = document.cookie.split(';');
       let idToken = null;
@@ -732,18 +677,12 @@
         const cookie = cookies[i].trim();
         if (cookie.startsWith('firebaseIdToken=')) {
           idToken = cookie.substring('firebaseIdToken='.length);
-          console.log("Found ID token in cookies");
           break;
         }
       }
       
       if (idToken) {
-        console.log("Found ID token, attempting to decode and use it directly");
-        
         try {
-          // Log the token length and format (without revealing the actual token)
-          console.log(`Token found (length: ${idToken.length}, starts with: ${idToken.substring(0, 5)}...)`);
-          
           // Decode the JWT token
           const tokenParts = idToken.split('.');
           if (tokenParts.length !== 3) {
@@ -752,7 +691,6 @@
           
           // Decode the payload (middle part of the JWT)
           const payload = JSON.parse(atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/')));
-          console.log("Successfully decoded token payload:", payload);
           
           // Check if the token is expired
           const currentTime = Math.floor(Date.now() / 1000);
@@ -797,18 +735,7 @@
             }]
           };
           
-          console.log("Created user object from token:", user);
-          
-          // Update UI with the user information
-          console.log("Updating UI with user information from token");
           updateUIForAuthenticatedUser(user);
-          
-          // Show auth status indicator
-          showAuthStatusIndicator(true, user);
-          
-          // Log success
-          console.log(`[${new Date().toISOString()}] ✅ AUTHENTICATION SUCCESSFUL (via token) ✅`);
-          console.log(`[${new Date().toISOString()}] User details from token: Email: ${user.email}, Name: ${user.displayName}, UID: ${user.uid}`);
           
           return true;
         } catch (error) {
@@ -816,7 +743,6 @@
           
           // Show debug info instead of redirecting
           setTimeout(() => {
-            console.log("Showing debug info after token processing error");
             showAuthError("Token Processing Error", `Could not process authentication token: ${error.message}`);
             showDebugInfo();
           }, 1000);

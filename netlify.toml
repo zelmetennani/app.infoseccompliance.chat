@@ -1,6 +1,6 @@
 [build]
   publish = "."
-  command = "sed -i 's|ANTHROPIC_API_KEY_PLACEHOLDER|'\"$VITE_LLM_API_KEY\"'|g' index.html && npm run build"
+  command = "echo 'Replacing API key placeholder...' && sed -i.bak 's/ANTHROPIC_API_KEY_PLACEHOLDER/'\"$VITE_LLM_API_KEY\"'/g' index.html && echo 'Replacement complete' && npm run build"
 
 [build.environment]
   NODE_VERSION = "16"

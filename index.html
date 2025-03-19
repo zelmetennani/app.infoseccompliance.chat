@@ -879,11 +879,11 @@
     // Function to send message to LLM API
     async function sendMessageToLLM(message) {
       try {
-        // For browser environments, we use a hardcoded API key that gets replaced during build
-        const apiKey = 'ANTHROPIC_API_KEY_PLACEHOLDER';
+        // Get API key from window.claudeConfig
+        const apiKey = window.claudeConfig?.apiKey || '';
         
-        if (!apiKey || apiKey === 'ANTHROPIC_API_KEY_PLACEHOLDER') {
-          console.error("API key not found or not replaced during build");
+        if (!apiKey) {
+          console.error("Claude API key not found in configuration");
           throw new Error("API configuration error. Please contact support.");
         }
         

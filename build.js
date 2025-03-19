@@ -12,7 +12,9 @@ const envVars = {
   storageBucket: process.env.storageBucket || '',
   messagingSenderId: process.env.messagingSenderId || '',
   appId: process.env.appId || '',
-  measurementId: process.env.measurementId || ''
+  measurementId: process.env.measurementId || '',
+  // Add Claude API key
+  claudeApiKey: process.env.VITE_LLM_API_KEY || ''
 };
 
 // Log environment variable status (without revealing full values)
@@ -25,7 +27,7 @@ Object.keys(envVars).forEach(key => {
 
 // Create a direct config.js file with the values
 const configContent = `
-// Firebase configuration - Generated during build
+// Auto-generated Firebase configuration
 window.firebaseConfig = {
   apiKey: "${envVars.apiKey}",
   authDomain: "infoseccompliance-chat.firebaseapp.com",
@@ -36,11 +38,17 @@ window.firebaseConfig = {
   measurementId: "${envVars.measurementId || ''}"
 };
 
+// Claude API configuration
+window.claudeConfig = {
+  apiKey: "${envVars.claudeApiKey}"
+};
+
 console.log("Firebase config loaded from environment variables");
+console.log("Claude API config loaded from environment variables");
 `;
 
 // Write the config file
 fs.writeFileSync('config.js', configContent);
-console.log('Generated config.js file with environment variables');
+console.log('Generated config.js with Firebase and Claude API configurations');
 
 console.log('Build completed successfully!'); 

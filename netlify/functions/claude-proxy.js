@@ -1,3 +1,6 @@
+// Import node-fetch
+const fetch = require('node-fetch');
+
 // Netlify function to proxy requests to Anthropic Claude API
 exports.handler = async function(event, context) {
   // Only allow POST requests

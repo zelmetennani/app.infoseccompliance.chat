@@ -115,7 +115,7 @@
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
-                  <a class="dropdown-item py-2" href="#">
+                  <a class="dropdown-item py-2" href="#" data-bs-toggle="modal" data-bs-target="#userSettingsModal">
                     <i class="bi bi-gear me-2"></i> Settings
                   </a>
                 </li>
@@ -945,6 +945,146 @@
       // Focus on the input field
       messageInput.focus();
     }
+
+    // Initialize the settings modal functionality when document is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      initializeSettingsModal();
+    });
+
+    // Initialize the settings modal functionality
+    function initializeSettingsModal() {
+      // Password reset functionality
+      const resetPasswordBtn = document.getElementById('resetPasswordBtn');
+      const resetPasswordMessage = document.getElementById('resetPasswordMessage');
+      
+      if (resetPasswordBtn) {
+        resetPasswordBtn.addEventListener('click', function() {
+          const user = firebase.auth().currentUser;
+          
+          if (user && user.email) {
+            // Send password reset email
+            firebase.auth().sendPasswordResetEmail(user.email)
+              .then(() => {
+                // Show success message
+                resetPasswordMessage.textContent = `Password reset email sent to ${user.email}`;
+                resetPasswordMessage.style.display = 'block';
+                
+                // Hide message after 5 seconds
+                setTimeout(() => {
+                  resetPasswordMessage.style.display = 'none';
+                }, 5000);
+              })
+              .catch((error) => {
+                // Show error message
+                resetPasswordMessage.textContent = `Error: ${error.message}`;
+                resetPasswordMessage.className = 'alert alert-danger mt-3';
+                resetPasswordMessage.style.display = 'block';
+              });
+          } else {
+            // Show error message if user is not available
+            resetPasswordMessage.textContent = 'Error: User information not available. Please try again later.';
+            resetPasswordMessage.className = 'alert alert-danger mt-3';
+            resetPasswordMessage.style.display = 'block';
+          }
+        });
+      }
+      
+      // Delete account confirmation input validation
+      const deleteConfirmInput = document.getElementById('deleteConfirmInput');
+      const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+      
+      if (deleteConfirmInput && confirmDeleteBtn) {
+        deleteConfirmInput.addEventListener('input', function() {
+          // Enable the delete button only if the input is exactly "DELETE"
+          confirmDeleteBtn.disabled = this.value !== 'DELETE';
+        });
+      }
+      
+      // Delete account functionality
+      if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', function() {
+          const user = firebase.auth().currentUser;
+          
+          if (user) {
+            // Delete the user account
+            user.delete()
+              .then(() => {
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('userSettingsModal'));
+                if (modal) {
+                  modal.hide();
+                }
+                
+                // Show success message and redirect to sign-in page
+                alert('Your account has been successfully deleted.');
+                window.location.href = 'https://infoseccompliance.chat/signin.html';
+              })
+              .catch((error) => {
+                // Show error message
+                alert(`Error deleting account: ${error.message}`);
+                
+                // If the error is due to requiring recent authentication, prompt the user to re-login
+                if (error.code === 'auth/requires-recent-login') {
+                  // Sign out the user and redirect to sign-in page
+                  firebase.auth().signOut()
+                    .then(() => {
+                      window.location.href = 'https://infoseccompliance.chat/signin.html?reason=reauthenticate';
+                    });
+                }
+              });
+          }
+        });
+      }
+    }
   </script>
+
+  <!-- User Settings Modal -->
+  <div class="modal fade" id="userSettingsModal" tabindex="-1" aria-labelledby="userSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="userSettingsModalLabel">Account Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Password Reset Section -->
+          <div class="settings-section mb-4">
+            <h6 class="settings-heading mb-3">Password Reset</h6>
+            <p class="text-muted mb-3">We'll send a password reset link to your email address.</p>
+            <button id="resetPasswordBtn" class="btn btn-primary">
+              <i class="bi bi-envelope me-2"></i>Send Reset Email
+            </button>
+            <div id="resetPasswordMessage" class="alert alert-success mt-3" style="display: none;"></div>
+          </div>
+          
+          <hr class="my-4">
+          
+          <!-- Delete Account Section -->
+          <div class="settings-section">
+            <h6 class="settings-heading mb-3 text-danger">Delete Account</h6>
+            <p class="text-muted mb-3">This action is permanent and cannot be undone. All your data will be permanently deleted.</p>
+            <button id="deleteAccountBtn" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#deleteConfirmation" aria-expanded="false" aria-controls="deleteConfirmation">
+              <i class="bi bi-trash me-2"></i>Delete My Account
+            </button>
+            
+            <!-- Delete Confirmation -->
+            <div class="collapse mt-3" id="deleteConfirmation">
+              <div class="card card-body bg-light">
+                <p class="text-danger fw-bold">Are you sure you want to delete your account?</p>
+                <p class="text-muted small">Please type "DELETE" to confirm:</p>
+                <input type="text" id="deleteConfirmInput" class="form-control mb-3" placeholder="Type DELETE here">
+                <button id="confirmDeleteBtn" class="btn btn-danger" disabled>
+                  <i class="bi bi-exclamation-triangle me-2"></i>Permanently Delete Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

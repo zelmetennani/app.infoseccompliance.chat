@@ -1,6 +1,7 @@
 [build]
   publish = "."
-  command = "echo 'Replacing API key placeholder...' && sed -i.bak 's/ANTHROPIC_API_KEY_PLACEHOLDER/'\"$VITE_LLM_API_KEY\"'/g' index.html && echo 'Replacement complete' && npm run build"
+  command = "npm run build"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "16"
@@ -8,4 +9,4 @@
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200 
+  status = 200

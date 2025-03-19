@@ -876,34 +876,17 @@
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
     
-    // Function to send message to LLM API
+    // Function to send message to LLM API via our proxy function
     async function sendMessageToLLM(message) {
       try {
-        // Get API key from window.claudeConfig
-        const apiKey = window.claudeConfig?.apiKey || '';
-        
-        if (!apiKey) {
-          console.error("Claude API key not found in configuration");
-          throw new Error("API configuration error. Please contact support.");
-        }
-        
-        // Anthropic Claude API endpoint with latest version
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        // Call our Netlify function instead of the Anthropic API directly
+        const response = await fetch('/.netlify/functions/claude-proxy', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: "claude-3-sonnet-20240229",
-            max_tokens: 1000,
-            messages: [
-              {
-                role: "user",
-                content: message
-              }
-            ]
+            message: message
           })
         });
         
@@ -915,8 +898,8 @@
         
         const data = await response.json();
         
-        // Return the AI response text from Claude's response format
-        return data.content[0].text;
+        // Return the AI response text
+        return data.message;
         
       } catch (error) {
         console.error("Error calling Claude API:", error);

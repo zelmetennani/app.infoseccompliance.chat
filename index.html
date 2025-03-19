@@ -32,38 +32,45 @@
       <!-- Sidebar -->
       <div class="col-md-3 col-lg-2 d-md-block d-none d-md-block bg-light sidebar">
         <div class="position-sticky pt-3">
-          <div class="d-flex justify-content-between align-items-center mb-3 px-3">
-            <h5 class="m-0">Chats</h5>
-            <button id="newChatBtn" class="btn btn-sm btn-primary">
-              <i class="bi bi-plus-circle"></i> New Chat
+          <!-- New Chat button with click functionality -->
+          <div class="d-flex justify-content-center mb-4 px-3">
+            <button id="newChatBtn" class="btn btn-primary w-100" onclick="startNewChat()">
+              <i class="bi bi-plus-circle me-2"></i> New Chat
             </button>
           </div>
-          <div id="chatHistory" class="chat-history px-2">
-            <!-- Chat history will be populated here -->
-            <div class="list-group">
-              <a href="#" class="list-group-item list-group-item-action active">
-                <div class="d-flex w-100 justify-content-between">
-                  <h6 class="mb-1">GDPR Compliance Questions</h6>
-                  <small>3d ago</small>
-                </div>
-                <small>Last message: What are the key requirements...</small>
-              </a>
-              <a href="#" class="list-group-item list-group-item-action">
-                <div class="d-flex w-100 justify-content-between">
-                  <h6 class="mb-1">ISO 27001 Implementation</h6>
-                  <small>1w ago</small>
-                </div>
-                <small>Last message: How do I prepare for an audit...</small>
-              </a>
-              <a href="#" class="list-group-item list-group-item-action">
-                <div class="d-flex w-100 justify-content-between">
-                  <h6 class="mb-1">HIPAA Security Rule</h6>
-                  <small>2w ago</small>
-                </div>
-                <small>Last message: What technical safeguards...</small>
-              </a>
+          
+          <!-- Divider -->
+          <hr class="my-3">
+          
+          <!-- Official Links Section - clickable -->
+          <a href="https://infoseccompliance.chat/docs" class="text-decoration-none">
+            <div class="sidebar-section mb-3">
+              <h6 class="sidebar-heading d-flex align-items-center px-3 py-2 text-muted">
+                <i class="bi bi-link-45deg me-2"></i>
+                <span>Official Links</span>
+              </h6>
             </div>
-          </div>
+          </a>
+          
+          <!-- Partners Section - clickable -->
+          <a href="https://infoseccompliance.chat/partners" class="text-decoration-none">
+            <div class="sidebar-section mb-3">
+              <h6 class="sidebar-heading d-flex align-items-center px-3 py-2 text-muted">
+                <i class="bi bi-people me-2"></i>
+                <span>Partners</span>
+              </h6>
+            </div>
+          </a>
+          
+          <!-- Support Section - clickable -->
+          <a href="https://infoseccompliance.chat/support" class="text-decoration-none">
+            <div class="sidebar-section mb-3">
+              <h6 class="sidebar-heading d-flex align-items-center px-3 py-2 text-muted">
+                <i class="bi bi-question-circle me-2"></i>
+                <span>Support</span>
+              </h6>
+            </div>
+          </a>
         </div>
       </div>
       
@@ -905,6 +912,38 @@
         console.error("Error calling Claude API:", error);
         throw new Error("Failed to get a response. Please try again later.");
       }
+    }
+
+    // Function to start a new chat
+    function startNewChat() {
+      // Clear the chat messages
+      const chatMessages = document.getElementById('chatMessages');
+      
+      // Display the welcome message
+      chatMessages.innerHTML = `
+        <div class="message ai-message">
+          <p>Welcome to InfoSec Compliance Chat! I'm an AI assistant specialized in information security, compliance frameworks, and cybersecurity best practices.</p>
+          <p>I can help with questions about:</p>
+          <ul>
+            <li>GDPR, HIPAA, SOC 2, ISO 27001, and other compliance frameworks</li>
+            <li>Security policies and procedures</li>
+            <li>Risk assessment and management</li>
+            <li>Data protection strategies</li>
+            <li>Security incident response</li>
+          </ul>
+          <p><em>Please note that while I strive for accuracy, my responses should be verified against official documentation and may not reflect the most recent regulatory changes. I'm here to assist, not to provide legal advice.</em></p>
+          <p>How can I help you today?</p>
+        </div>
+      `;
+      
+      // Clear the input field
+      const messageInput = document.getElementById('messageInput');
+      if (messageInput) {
+        messageInput.value = '';
+      }
+      
+      // Focus on the input field
+      messageInput.focus();
     }
   </script>
 </body>

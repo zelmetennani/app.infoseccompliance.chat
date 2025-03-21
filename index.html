@@ -53,7 +53,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Official Links</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/resources.html">
+                <a class="nav-link" href="https://infoseccompliance.chat/resources.html" target="_blank" rel="noopener noreferrer">
                   <i class="bi bi-shield-check"></i> Resources
                 </a>
               </li>
@@ -63,7 +63,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Partners</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/about-us.html">
+                <a class="nav-link" href="https://infoseccompliance.chat/about-us.html" target="_blank" rel="noopener noreferrer">
                   <i class="bi bi-people"></i> About Us
                 </a>
               </li>
@@ -73,7 +73,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Support</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/contact.html">
+                <a class="nav-link" href="https://infoseccompliance.chat/contact.html" target="_blank" rel="noopener noreferrer">
                   <i class="bi bi-envelope"></i> Contact Us
                 </a>
               </li>
@@ -99,15 +99,10 @@
           <!-- Navigation elements -->
           <div class="d-flex align-items-center">
             <!-- Docs tab -->
-            <a href="https://infoseccompliance.chat/resources.html" class="nav-link px-3">Docs</a>
+            <a href="https://infoseccompliance.chat/resources.html" class="nav-link px-3" target="_blank" rel="noopener noreferrer">Docs</a>
             
             <!-- Help tab -->
-            <a href="https://infoseccompliance.chat/contact.html" class="nav-link px-3">Help</a>
-            
-            <!-- Home button -->
-            <a href="#" class="nav-link px-3">
-              <i class="bi bi-house-door"></i>
-            </a>
+            <a href="https://infoseccompliance.chat/contact.html" class="nav-link px-3" target="_blank" rel="noopener noreferrer">Help</a>
             
             <!-- User profile dropdown (rightmost) -->
             <div class="dropdown ms-2">
@@ -325,13 +320,54 @@
       });
     }
 
-    // Update UI for authenticated user
+    // Function to generate a default profile image using the first letter of email
+    function generateDefaultProfileImage(email) {
+      // Default to 'U' if no email is provided
+      const firstLetter = email && email.length > 0 ? email[0].toUpperCase() : 'U';
+      
+      // Create a canvas element
+      const canvas = document.createElement('canvas');
+      const size = 40; // Size of the canvas
+      canvas.width = size;
+      canvas.height = size;
+      
+      const context = canvas.getContext('2d');
+      
+      // Generate a consistent color based on the letter
+      const hue = (firstLetter.charCodeAt(0) - 65) * 15 % 360;
+      const bgColor = `hsl(${hue}, 70%, 60%)`;
+      
+      // Draw a colored circle
+      context.fillStyle = bgColor;
+      context.beginPath();
+      context.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+      context.fill();
+      
+      // Draw the letter
+      context.fillStyle = '#ffffff';
+      context.font = 'bold 20px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(firstLetter, size/2, size/2);
+      
+      // Return the canvas as data URL
+      return canvas.toDataURL('image/png');
+    }
+
+    // Update this function to use the generated profile image
     function updateUIForAuthenticatedUser(user) {
       // Update user profile display
       document.getElementById('userName').textContent = user.displayName || 'User';
       document.getElementById('userEmail').textContent = user.email || user.uid;
+      
+      // Set profile image - use photo URL if available, otherwise generate default
+      const userProfilePic = document.getElementById('userProfilePic');
       if (user.photoURL) {
-        document.getElementById('userProfilePic').src = user.photoURL;
+        userProfilePic.src = user.photoURL;
+      } else if (user.email) {
+        userProfilePic.src = generateDefaultProfileImage(user.email);
+      } else {
+        userProfilePic.src = generateDefaultProfileImage(''); // Default image
       }
       
       // Replace with a more comprehensive welcome message

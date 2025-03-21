@@ -53,7 +53,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Official Links</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/resources.html" target="_blank" rel="noopener noreferrer">
+                <a class="nav-link" href="https://infoseccompliance.chat/resources.html">
                   <i class="bi bi-shield-check"></i> Resources
                 </a>
               </li>
@@ -63,7 +63,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Partners</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/about-us.html" target="_blank" rel="noopener noreferrer">
+                <a class="nav-link" href="https://infoseccompliance.chat/about-us.html">
                   <i class="bi bi-people"></i> About Us
                 </a>
               </li>
@@ -73,7 +73,7 @@
             <h6 class="sidebar-heading px-3 mt-4 mb-1 text-muted">Support</h6>
             <ul class="nav flex-column">
               <li class="nav-item">
-                <a class="nav-link" href="https://infoseccompliance.chat/contact.html" target="_blank" rel="noopener noreferrer">
+                <a class="nav-link" href="https://infoseccompliance.chat/contact.html">
                   <i class="bi bi-envelope"></i> Contact Us
                 </a>
               </li>
@@ -835,8 +835,8 @@
           showTypingIndicator();
           
           // Send message to LLM API
-          sendMessageToLLM(userMessage)
-            .then(response => {
+          sendMessageWithContext(userMessage)
+            .then(conversationId => {
               // Hide typing indicator
               hideTypingIndicator();
               
@@ -1079,6 +1079,107 @@
           }
         });
       }
+    }
+
+    // Process message with context
+    async function sendMessageWithContext(message, conversationId) {
+      const user = firebase.auth().currentUser;
+      
+      if (!user) {
+        showAuthError("Authentication Required", "Please sign in to send messages.");
+        return;
+      }
+      
+      const userId = user.uid;
+      
+      // Get conversation history
+      let conversation;
+      if (conversationId) {
+        conversation = await getConversation(userId, conversationId);
+      } else {
+        // Create new conversation
+        conversation = await createNewConversation(userId, message);
+        conversationId = conversation.id;
+      }
+      
+      // Add user message to UI
+      addMessageToUI(message, "user");
+      
+      // Add user message to Firestore
+      await addMessageToConversation(userId, conversationId, {
+        id: generateId(),
+        role: "user",
+        content: message,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Format previous messages as context
+      const pastMessages = conversation.data().messages;
+      const context = formatMessagesAsContext(pastMessages);
+      
+      // Send to backend API with context
+      const response = await sendToAI(message, context);
+      
+      // Add AI response to Firestore
+      await addMessageToConversation(userId, conversationId, {
+        id: generateId(),
+        role: "assistant",
+        content: response,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Add AI response to UI
+      addMessageToUI(response, "assistant");
+      
+      return conversationId;
+    }
+
+    // Get all conversations
+    function getConversations(userId) {
+      return firebase.firestore()
+        .collection('users').doc(userId)
+        .collection('conversations')
+        .orderBy('updatedAt', 'desc')
+        .get();
+    }
+
+    // Get a specific conversation
+    function getConversation(userId, conversationId) {
+      return firebase.firestore()
+        .collection('users').doc(userId)
+        .collection('conversations')
+        .doc(conversationId)
+        .get();
+    }
+
+    // Create new conversation
+    function createNewConversation(userId, firstMessage) {
+      const conversationsRef = firebase.firestore().collection('users').doc(userId).collection('conversations');
+      const title = generateTitle(firstMessage);
+      
+      return conversationsRef.add({
+        title: title,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        messages: [{
+          id: generateId(),
+          role: "user",
+          content: firstMessage,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }]
+      });
+    }
+
+    // Add message to conversation
+    function addMessageToConversation(userId, conversationId, message) {
+      const conversationRef = firebase.firestore()
+        .collection('users').doc(userId)
+        .collection('conversations').doc(conversationId);
+        
+      return conversationRef.update({
+        messages: firebase.firestore.FieldValue.arrayUnion(message),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
   </script>
 

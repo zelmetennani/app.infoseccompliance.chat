@@ -816,7 +816,6 @@
     function setupChatFunctionality() {
       const chatForm = document.getElementById('chatForm');
       const messageInput = document.getElementById('messageInput');
-      const chatMessages = document.getElementById('chatMessages');
       
       if (chatForm) {
         chatForm.addEventListener('submit', function(e) {
@@ -834,14 +833,16 @@
           // Show typing indicator
           showTypingIndicator();
           
-          // Send message to LLM API
+          // Send message to LLM API - FIX ERROR HERE
           sendMessageWithContext(userMessage)
-            .then(conversationId => {
+            .then(result => {
               // Hide typing indicator
               hideTypingIndicator();
               
-              // Display AI response
-              displayMessage(response, 'ai');
+              // The response is now handled inside sendMessageWithContext
+              // We don't need to display it here as it's already displayed
+              // Just log the conversationId for debugging
+              console.log("Message sent in conversation:", result);
             })
             .catch(error => {
               // Hide typing indicator

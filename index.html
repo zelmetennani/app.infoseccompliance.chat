@@ -35,15 +35,15 @@
           <!-- Sidebar header with home link -->
           <div class="sidebar-header">
             <h3><a href="/" class="text-decoration-none text-reset">InfoSec Chat</a></h3>
-          </div>
-          
+        </div>
+        
           <!-- New Chat button with click functionality -->
           <div class="new-chat-button mt-3">
             <button id="newChatBtn" class="btn btn-primary w-100" onclick="startNewChat()">
               <i class="bi bi-plus-circle me-2"></i> New Chat
             </button>
-          </div>
-          
+        </div>
+        
           <!-- Divider -->
           <hr class="my-3">
           
@@ -78,7 +78,7 @@
                 </a>
               </li>
             </ul>
-          </div>
+            </div>
         </div>
       </div>
       
@@ -259,8 +259,8 @@
                     
                     // Add this right after Firebase initialization but before checking auth state
                     const hasTokenInCookies = checkForIdTokenInCookies();
-                })
-                .catch(error => {
+          })
+          .catch(error => {
                     console.error("Error setting persistence:", error);
                     showAuthError("Authentication Error", "Could not set up authentication persistence. Please try again.");
                     
@@ -268,8 +268,8 @@
                     setTimeout(() => {
                       checkAuthState();
                     }, 2000);
-                });
-            } else {
+          });
+      } else {
                 console.error("Firebase config not found even after loading config.js");
                 showAuthError("Configuration Error", "Firebase configuration is missing or invalid. Please contact support.");
               }
@@ -680,7 +680,7 @@
             <div class="d-flex align-items-center">
               <div class="spinner-border spinner-border-sm me-2" role="status"></div>
               <span>Testing authentication connection...</span>
-            </div>
+                </div>
           </div>
         `;
       }
@@ -843,8 +843,8 @@
               // We don't need to display it here as it's already displayed
               // Just log the conversationId for debugging
               console.log("Message sent in conversation:", result);
-            })
-            .catch(error => {
+          })
+          .catch(error => {
               // Hide typing indicator
               hideTypingIndicator();
               
@@ -861,7 +861,7 @@
       const chatMessages = document.getElementById('chatMessages');
       
       // Create message element
-      const messageDiv = document.createElement('div');
+        const messageDiv = document.createElement('div');
       messageDiv.className = `message ${sender}-message`;
       
       // Add error styling if it's an error message
@@ -871,22 +871,22 @@
       }
       
       // Process markdown for AI messages
-      if (sender === 'ai') {
+        if (sender === 'ai') {
         messageDiv.innerHTML = marked.parse(message);
-        
-        // Apply syntax highlighting to code blocks
-        messageDiv.querySelectorAll('pre code').forEach((block) => {
-          hljs.highlightElement(block);
-        });
-      } else {
+          
+          // Apply syntax highlighting to code blocks
+          messageDiv.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+          });
+        } else {
         // For user messages, just use text
         messageDiv.textContent = message;
-      }
-      
+        }
+        
       // Add to chat
-      chatMessages.appendChild(messageDiv);
-      
-      // Scroll to bottom
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll to bottom
       scrollToBottom();
     }
     
@@ -898,30 +898,30 @@
       hideTypingIndicator();
       
       // Create typing indicator
-      const typingDiv = document.createElement('div');
+        const typingDiv = document.createElement('div');
       typingDiv.className = 'typing-indicator message ai-message';
-      typingDiv.id = 'typingIndicator';
-      typingDiv.innerHTML = `
-        <span></span>
-        <span></span>
-        <span></span>
-      `;
-      
+        typingDiv.id = 'typingIndicator';
+        typingDiv.innerHTML = `
+          <span></span>
+          <span></span>
+          <span></span>
+        `;
+        
       // Add to chat
-      chatMessages.appendChild(typingDiv);
+        chatMessages.appendChild(typingDiv);
       
       // Scroll to bottom
       scrollToBottom();
-    }
-    
+      }
+
     // Function to hide typing indicator
     function hideTypingIndicator() {
-      const typingIndicator = document.getElementById('typingIndicator');
-      if (typingIndicator) {
-        typingIndicator.remove();
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) {
+          typingIndicator.remove();
+        }
       }
-    }
-    
+
     // Function to scroll chat to bottom
     function scrollToBottom() {
       const chatMessages = document.getElementById('chatMessages');
@@ -933,27 +933,27 @@
       try {
         // Call our Netlify function instead of the Anthropic API directly
         const response = await fetch('/.netlify/functions/claude-proxy', {
-          method: 'POST',
-          headers: {
+            method: 'POST',
+            headers: {
             'Content-Type': 'application/json'
-          },
+            },
           body: JSON.stringify({
             message: message
           })
-        });
-        
-        if (!response.ok) {
+          });
+          
+          if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           console.error("API error details:", errorData);
           throw new Error(`API responded with status: ${response.status}`);
-        }
-        
-        const data = await response.json();
+          }
+          
+          const data = await response.json();
         
         // Return the AI response text
         return data.message;
         
-      } catch (error) {
+        } catch (error) {
         console.error("Error calling Claude API:", error);
         throw new Error("Failed to get a response. Please try again later.");
       }
@@ -1106,7 +1106,7 @@
           conversation = await createNewConversation(userId, message);
           conversationId = conversation.id;
         }
-      } else {
+          } else {
         // Create new conversation
         conversation = await createNewConversation(userId, message);
         conversationId = conversation.id;

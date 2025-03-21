@@ -1093,14 +1093,30 @@
       
       const userId = user.uid;
       
+      // Log the conversation ID for debugging
+      console.log("Starting message send with conversationId:", conversationId || "new conversation");
+      
       // Get conversation history
       let conversation;
       if (conversationId) {
         conversation = await getConversation(userId, conversationId);
+        // Check if conversation exists
+        if (!conversation.exists) {
+          console.log("Conversation not found, creating new one");
+          conversation = await createNewConversation(userId, message);
+          conversationId = conversation.id;
+        }
       } else {
         // Create new conversation
         conversation = await createNewConversation(userId, message);
         conversationId = conversation.id;
+      }
+      
+      // Verify we have a valid conversation ID
+      if (!conversationId) {
+        console.error("Failed to get or create conversation ID");
+        addMessageToUI("Error: Could not create or retrieve conversation. Please try again.", "assistant");
+        return null;
       }
       
       // Add user message to UI
@@ -1132,6 +1148,7 @@
       // Add AI response to UI
       addMessageToUI(response, "assistant");
       
+      console.log("Message sent in conversation:", conversationId);
       return conversationId;
     }
 

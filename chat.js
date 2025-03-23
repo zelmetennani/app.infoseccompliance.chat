@@ -54,8 +54,8 @@ function initializeChat() {
         displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
       }
     } else {
-      // User is signed out, redirect to sign-in page
-      window.location.href = "https://infoseccompliance.chat/signin.html";
+      // User is signed out, but not redirecting for troubleshooting
+      console.log("No user signed in - would normally redirect to signin page, but staying for troubleshooting");
     }
   });
 }

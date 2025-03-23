@@ -33,12 +33,33 @@ function initializeChat() {
   // Set up event listeners
   setupEventListeners();
   
-  // Check authentication status
+  // Try to get current user immediately (in case auth state already resolved)
+  const immediateUser = firebase.auth().currentUser;
+  if (immediateUser) {
+    currentUser = immediateUser;
+    console.log("Current user already available:", immediateUser.uid);
+    
+    // If we have a user immediately, load their conversations
+    getUserConversations(immediateUser.uid)
+      .then(conversations => {
+        displayConversationsList(conversations);
+      })
+      .catch(error => {
+        console.error("Error loading conversations:", error);
+      });
+      
+    // Check if we need to display welcome message
+    if (!currentConversationId) {
+      displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+    }
+  }
+  
+  // Also set up the auth state listener for future changes
   firebase.auth().onAuthStateChanged(function(user) {
     if (user) {
       // User is signed in
       currentUser = user;
-      console.log("User is signed in:", user.uid);
+      console.log("Auth state changed - User is signed in:", user.uid);
       
       // Load user's conversations
       getUserConversations(user.uid)
@@ -55,7 +76,7 @@ function initializeChat() {
       }
     } else {
       // User is signed out, but not redirecting for troubleshooting
-      console.log("No user signed in - would normally redirect to signin page, but staying for troubleshooting");
+      console.log("Auth state changed - No user signed in");
     }
   });
 }
@@ -91,29 +112,49 @@ async function handleChatSubmit(event) {
   messageInput.value = '';
   
   try {
+    // Check multiple ways to get the current user
+    let userToUse = currentUser || firebase.auth().currentUser;
+    
+    if (!userToUse) {
+      console.error("User not authenticated");
+      displayErrorMessage("Authentication issue. Please refresh the page.");
+      return;
+    }
+    
+    console.log("Using user:", userToUse.uid);
+    
+    // Display user message
+    displayMessage(message, 'user');
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
     // Check if user can send message based on tier limits
-    const canSend = await canSendMessage(currentUser.uid);
+    const canSend = await canSendMessage(userToUse.uid);
     
     if (!canSend.allowed) {
       // User has reached their limit
+      hideTypingIndicator();
       showUpgradePrompt(canSend.reason);
       return;
     }
     
     if (currentConversationId) {
       // Add to existing conversation
-      await sendMessageWithContext(currentUser.uid, currentConversationId, message);
+      await sendMessageWithContext(userToUse.uid, currentConversationId, message);
     } else {
       // Create new conversation
-      const conversationId = await createNewConversation(currentUser.uid, message);
+      const conversationId = await createNewConversation(userToUse.uid, message);
       currentConversationId = conversationId;
+      console.log("Created new conversation with ID:", conversationId);
       
       // Refresh conversation list
-      const conversations = await getUserConversations(currentUser.uid);
+      const conversations = await getUserConversations(userToUse.uid);
       displayConversationsList(conversations);
     }
   } catch (error) {
     console.error("Error sending message:", error);
+    hideTypingIndicator();
     displayErrorMessage("There was an error sending your message. Please try again.");
   }
 }
@@ -655,7 +696,14 @@ function showUpgradePrompt(reason) {
   const upgradePremiumBtn = document.getElementById('upgradePremiumBtn');
   if (upgradePremiumBtn) {
     upgradePremiumBtn.addEventListener('click', () => {
-      upgradeToPaidTier(currentUser.uid, 'premium');
+      // Get current user with fallback
+      const userToUse = currentUser || firebase.auth().currentUser;
+      if (userToUse) {
+        upgradeToPaidTier(userToUse.uid, 'premium');
+      } else {
+        console.error("No user found for upgrade");
+        displayErrorMessage("Authentication issue. Please refresh and try again.");
+      }
     });
   }
   

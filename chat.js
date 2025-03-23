@@ -5,23 +5,6 @@ let currentConversationId = null;
 
 // Initialize chat functionality when document is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Wait for Firebase to be initialized
-  if (firebase.apps.length) {
-    // Firebase is already initialized
-    initializeFirestore();
-  } else {
-    // Wait for Firebase to initialize
-    const checkFirebase = setInterval(() => {
-      if (firebase.apps.length) {
-        clearInterval(checkFirebase);
-        initializeFirestore();
-      }
-    }, 100);
-  }
-});
-
-// Initialize Firestore after Firebase is ready
-function initializeFirestore() {
   // Initialize Firebase
   db = firebase.firestore();
   
@@ -48,7 +31,7 @@ function initializeFirestore() {
       window.location.href = "https://infoseccompliance.chat/signin.html";
     }
   });
-}
+});
 
 // Set up event listeners for UI components
 function setupEventListeners() {

@@ -1086,14 +1086,12 @@
       const user = firebase.auth().currentUser;
       
       if (!user) {
-        showAuthError("Authentication Required", "Please sign in to send messages.");
+        console.log("Authentication required. Redirecting to sign-in page.");
+        window.location.href = "https://infoseccompliance.chat/signin.html";
         return;
       }
       
       const userId = user.uid;
-      
-      // Log the conversation ID for debugging
-      console.log("Starting message send with conversationId:", conversationId || "new conversation");
       
       // Get conversation history
       let conversation;
@@ -1105,7 +1103,7 @@
           conversation = await createNewConversation(userId, message);
           conversationId = conversation.id;
         }
-          } else {
+      } else {
         // Create new conversation
         conversation = await createNewConversation(userId, message);
         conversationId = conversation.id;
@@ -1114,41 +1112,46 @@
       // Verify we have a valid conversation ID
       if (!conversationId) {
         console.error("Failed to get or create conversation ID");
-        addMessageToUI("Error: Could not create or retrieve conversation. Please try again.", "assistant");
+        addMessageToUI("Could not create or retrieve conversation. Please try again.", "assistant");
         return null;
       }
       
       // Add user message to UI
       addMessageToUI(message, "user");
       
-      // Add user message to Firestore
-      await addMessageToConversation(userId, conversationId, {
-        id: generateId(),
-        role: "user",
-        content: message,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Format previous messages as context
-      const pastMessages = conversation.data().messages;
-      const context = formatMessagesAsContext(pastMessages);
-      
-      // Send to backend API with context
-      const response = await sendToAI(message, context);
-      
-      // Add AI response to Firestore
-      await addMessageToConversation(userId, conversationId, {
-        id: generateId(),
-        role: "assistant",
-        content: response,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Add AI response to UI
-      addMessageToUI(response, "assistant");
-      
-      console.log("Message sent in conversation:", conversationId);
-      return conversationId;
+      try {
+        // Add user message to Firestore
+        await addMessageToConversation(userId, conversationId, {
+          id: generateId(),
+          role: "user",
+          content: message,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Format previous messages as context
+        const pastMessages = conversation.data().messages;
+        const context = formatMessagesAsContext(pastMessages);
+        
+        // Send to backend API with context
+        const response = await sendToAI(message, context);
+        
+        // Add AI response to Firestore
+        await addMessageToConversation(userId, conversationId, {
+          id: generateId(),
+          role: "assistant",
+          content: response,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Add AI response to UI
+        addMessageToUI(response, "assistant");
+        
+        return conversationId;
+      } catch (error) {
+        console.error("Error in message processing:", error);
+        addMessageToUI("Sorry, there was an error processing your message. Please try again.", "assistant");
+        return conversationId;
+      }
     }
 
     // Get all conversations
@@ -1197,6 +1200,120 @@
         messages: firebase.firestore.FieldValue.arrayUnion(message),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+    }
+
+    // Send message to AI backend
+    async function sendToAI(message, context) {
+      try {
+        console.log("Sending message to AI backend");
+        
+        // Check if Claude API key is available
+        if (!window.claudeConfig || !window.claudeConfig.apiKey) {
+          console.error("Claude API key not found");
+          return "Sorry, the AI service is currently unavailable. Please try again later.";
+        }
+        
+        // Prepare the request body
+        const requestBody = {
+          message: message,
+          context: context
+        };
+        
+        console.log("Request payload prepared:", { 
+          messageLength: message.length,
+          contextLength: context ? context.length : 0
+        });
+        
+        // Send the request to our Netlify function
+        const response = await fetch('/.netlify/functions/claude-proxy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': window.claudeConfig.apiKey
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        // Check if the response is ok
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`API error (${response.status}):`, errorText);
+          return `Sorry, there was an error communicating with the AI service (${response.status}). Please try again later.`;
+        }
+        
+        // Parse the response
+        const data = await response.json();
+        console.log("Received response from AI backend");
+        
+        // Return the AI's response
+        return data.response;
+      } catch (error) {
+        console.error('Error sending message to AI:', error);
+        return "Sorry, there was an error communicating with the AI service. Please try again later.";
+      }
+    }
+
+    // Load user conversations
+    function loadUserConversations(userId) {
+      console.log("Loading user conversations for:", userId);
+      
+      // Get the conversation list element
+      const conversationList = document.getElementById('conversationList');
+      if (!conversationList) {
+        console.error("Conversation list element not found");
+        return;
+      }
+      
+      // Clear existing conversations
+      conversationList.innerHTML = '';
+      
+      // Get conversations from Firestore
+      getConversations(userId)
+        .then(querySnapshot => {
+          console.log(`Found ${querySnapshot.size} conversations`);
+          
+          if (querySnapshot.empty) {
+            // No conversations found
+            conversationList.innerHTML = '<div class="text-center text-muted my-4">No conversations yet</div>';
+            return;
+          }
+          
+          // Add each conversation to the list
+          querySnapshot.forEach(doc => {
+            const conversation = doc.data();
+            const conversationId = doc.id;
+            
+            // Create conversation item
+            const conversationItem = document.createElement('div');
+            conversationItem.className = 'conversation-item';
+            conversationItem.dataset.id = conversationId;
+            
+            // Format date
+            const date = formatDate(conversation.updatedAt);
+            
+            // Get preview of last message
+            const preview = getLastMessagePreview(conversation.messages);
+            
+            // Set HTML content
+            conversationItem.innerHTML = `
+              <div class="conversation-title">${conversation.title}</div>
+              <div class="conversation-preview">${preview}</div>
+              <div class="conversation-date">${date}</div>
+            `;
+            
+            // Add click event to load conversation
+            conversationItem.addEventListener('click', function() {
+              loadConversation(userId, conversationId);
+            });
+            
+            // Add to list
+            conversationList.appendChild(conversationItem);
+          });
+        })
+        .catch(error => {
+          console.error('Error loading conversations:', error);
+          conversationList.innerHTML = '<div class="text-center text-danger my-4">Error loading conversations</div>';
+        });
     }
   </script>
 

@@ -3,10 +3,32 @@ let db;
 let currentUser;
 let currentConversationId = null;
 
-// Initialize chat functionality when document is loaded
-document.addEventListener('DOMContentLoaded', function() {
-  // Initialize Firebase
+// Function to initialize Firebase and Firestore
+function initializeFirebase() {
+  // Check if Firebase config exists and is not already initialized
+  if (typeof firebaseConfig !== 'undefined' && !firebase.apps.length) {
+    // Initialize Firebase with the config
+    firebase.initializeApp(firebaseConfig);
+    console.log("Firebase initialized from chat.js");
+  } else if (!firebase.apps.length) {
+    console.error("Firebase config not found and Firebase not initialized");
+    return false;
+  }
+  
+  // Initialize Firestore
   db = firebase.firestore();
+  return true;
+}
+
+// Main initialization function
+function initializeChat() {
+  console.log("Initializing chat functionality");
+  
+  // Try to initialize Firebase
+  if (!initializeFirebase()) {
+    console.error("Failed to initialize Firebase. Chat functionality disabled.");
+    return;
+  }
   
   // Set up event listeners
   setupEventListeners();
@@ -26,12 +48,20 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
           console.error("Error loading conversations:", error);
         });
+        
+      // Check if we need to display welcome message
+      if (!currentConversationId) {
+        displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+      }
     } else {
       // User is signed out, redirect to sign-in page
       window.location.href = "https://infoseccompliance.chat/signin.html";
     }
   });
-});
+}
+
+// Call initialization when the document is loaded
+document.addEventListener('DOMContentLoaded', initializeChat);
 
 // Set up event listeners for UI components
 function setupEventListeners() {
@@ -720,16 +750,6 @@ function formatTimestamp(timestamp) {
   
   // For older dates, use actual date
   return date.toLocaleDateString();
-}
-
-// Initialize chat when document is loaded
-function initializeChat() {
-  console.log("Initializing chat functionality");
-  
-  // Check if we need to display welcome message
-  if (!currentConversationId) {
-    displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-  }
 }
 
 // Export functions for use in other files

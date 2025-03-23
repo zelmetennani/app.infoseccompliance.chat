@@ -1086,8 +1086,20 @@
       const user = firebase.auth().currentUser;
       
       if (!user) {
-        console.log("Authentication required. Redirecting to sign-in page.");
-        window.location.href = "https://infoseccompliance.chat/signin.html";
+        console.log("Authentication required but user not found.", {
+          authState: firebase.auth(),
+          authInitialized: authInitialized,
+          authStateListenerSet: authStateListenerSet,
+          authCheckComplete: authCheckComplete,
+          cookies: document.cookie,
+          hasFirebaseAuth: typeof firebase !== 'undefined' && firebase.auth
+        });
+        
+        // Temporarily comment out the redirect to debug
+        // window.location.href = "https://infoseccompliance.chat/signin.html";
+        
+        // Instead show a message in the UI
+        displayMessage("Authentication issue detected. Please refresh the page and try again.", 'ai', true);
         return;
       }
       

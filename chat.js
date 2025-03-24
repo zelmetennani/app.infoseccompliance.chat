@@ -20,6 +20,34 @@ function initializeFirebase() {
   return true;
 }
 
+// Check for auth token in cookies
+function checkForIdTokenInCookies() {
+  const cookies = document.cookie.split(';');
+  for (let i = 0; i < cookies.length; i++) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith('firebaseIdToken=')) {
+      const token = cookie.substring('firebaseIdToken='.length);
+      console.log("Found Firebase ID token in cookies");
+      
+      // Sign in with the token
+      firebase.auth().signInWithCustomToken(token)
+        .then((userCredential) => {
+          currentUser = userCredential.user;
+          console.log("Successfully signed in with token from cookies:", currentUser.uid);
+          return true;
+        })
+        .catch((error) => {
+          console.error("Error signing in with token from cookies:", error);
+          return false;
+        });
+      
+      return true;
+    }
+  }
+  console.log("No Firebase ID token found in cookies");
+  return false;
+}
+
 // Main initialization function
 function initializeChat() {
   console.log("Initializing chat functionality");
@@ -32,6 +60,9 @@ function initializeChat() {
   
   // Set up event listeners
   setupEventListeners();
+  
+  // Check for auth token in cookies
+  checkForIdTokenInCookies();
   
   // Try to get current user immediately (in case auth state already resolved)
   const immediateUser = firebase.auth().currentUser;
@@ -75,8 +106,11 @@ function initializeChat() {
         displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
       }
     } else {
-      // User is signed out, but not redirecting for troubleshooting
+      // User is signed out
       console.log("Auth state changed - No user signed in");
+      
+      // Try to get auth from cookies as fallback
+      checkForIdTokenInCookies();
     }
   });
 }

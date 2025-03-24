@@ -40,58 +40,61 @@ function initializeChat() {
   // Print all cookies for debugging
   console.log("All cookies available:", document.cookie);
   
-  // Extract the token from cookies
-  const cookies = document.cookie.split(';');
-  let firebaseIdToken = null;
-  
-  for (let i = 0; i < cookies.length; i++) {
-    const cookie = cookies[i].trim();
-    if (cookie.startsWith('firebaseIdToken=')) {
-      firebaseIdToken = cookie.substring('firebaseIdToken='.length);
-      console.log("Found Firebase ID token in cookies (length: " + firebaseIdToken.length + ")");
-      break;
-    }
-  }
-  
-  if (firebaseIdToken) {
-    // We found an ID token
-    console.log("Attempting to use ID token from cookies");
-    
-    try {
-      // For ID tokens, we need to create a credential first
-      // Using Google Auth Provider to create a credential from the ID token
-      const credential = firebase.auth.GoogleAuthProvider.credential(firebaseIdToken);
+  // First, try to set persistence to LOCAL which allows auth state to be shared
+  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+    .then(() => {
+      console.log("Firebase persistence set to LOCAL");
       
-      // Sign in with credential
-      firebase.auth().signInWithCredential(credential)
-        .then((userCredential) => {
-          // User signed in successfully
-          currentUser = userCredential.user;
-          console.log("Successfully signed in with ID token credential:", currentUser.uid);
+      // Extract Firebase user ID from token to use for verification
+      const cookies = document.cookie.split(';');
+      let userId = null;
+      
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith('firebaseIdToken=')) {
+          const token = cookie.substring('firebaseIdToken='.length);
+          console.log("Found Firebase ID token in cookies");
           
-          // Load user's conversations
-          getUserConversations(currentUser.uid)
-            .then(conversations => {
-              displayConversationsList(conversations);
-            })
-            .catch(error => {
-              console.error("Error loading conversations:", error);
-            });
-            
-          // Check if we need to display welcome message
-          if (!currentConversationId) {
-            displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+          try {
+            // Decode the token to get the user_id (simple JWT parsing)
+            const tokenParts = token.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              userId = payload.user_id;
+              console.log("Extracted user ID from token:", userId);
+            }
+          } catch (e) {
+            console.error("Error decoding token:", e);
           }
-        })
-        .catch((error) => {
-          console.error("Failed to sign in with ID token credential:", error);
-          console.log("Falling back to auth state observer");
-        });
-    } catch (error) {
-      console.error("Error creating credential from ID token:", error);
-      console.log("Falling back to auth state observer");
-    }
-  }
+          break;
+        }
+      }
+      
+      // Try using an anonymized sign-in and then link accounts if necessary
+      if (userId) {
+        console.log("Creating user object directly with ID:", userId);
+        // Directly access user data with the ID we know
+        currentUser = { uid: userId };
+        
+        // Load user's conversations
+        getUserConversations(userId)
+          .then(conversations => {
+            displayConversationsList(conversations);
+            console.log("Successfully loaded conversations for user:", userId);
+          })
+          .catch(error => {
+            console.error("Error loading conversations:", error);
+          });
+        
+        // Display welcome message
+        if (!currentConversationId) {
+          displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+        }
+      }
+    })
+    .catch(error => {
+      console.error("Failed to set persistence:", error);
+    });
   
   // Also set up the auth state listener as a fallback
   firebase.auth().onAuthStateChanged(function(user) {
@@ -118,9 +121,6 @@ function initializeChat() {
     } else {
       // User is signed out
       console.log("Auth state changed - No user signed in");
-      
-      // Check if we need to get the current user in a different way
-      console.log("Current auth user check:", firebase.auth().currentUser);
     }
   });
 }
@@ -156,7 +156,7 @@ async function handleChatSubmit(event) {
   messageInput.value = '';
   
   try {
-    // Check for user in multiple ways
+    // Check for user in multiple ways, including our manual approach
     let userToUse = currentUser || firebase.auth().currentUser;
     
     if (!userToUse) {

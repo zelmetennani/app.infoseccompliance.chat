@@ -40,55 +40,56 @@ function initializeChat() {
   // Print all cookies for debugging
   console.log("All cookies available:", document.cookie);
   
-  // First, try to set persistence to LOCAL which allows auth state to be shared
+  // Set persistence to LOCAL first
   firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
     .then(() => {
       console.log("Firebase persistence set to LOCAL");
       
-      // Extract Firebase user ID from token to use for verification
+      // Extract token from cookies
       const cookies = document.cookie.split(';');
-      let userId = null;
+      let idToken = null;
       
       for (let i = 0; i < cookies.length; i++) {
         const cookie = cookies[i].trim();
         if (cookie.startsWith('firebaseIdToken=')) {
-          const token = cookie.substring('firebaseIdToken='.length);
+          idToken = cookie.substring('firebaseIdToken='.length);
           console.log("Found Firebase ID token in cookies");
-          
-          try {
-            // Decode the token to get the user_id (simple JWT parsing)
-            const tokenParts = token.split('.');
-            if (tokenParts.length === 3) {
-              const payload = JSON.parse(atob(tokenParts[1]));
-              userId = payload.user_id;
-              console.log("Extracted user ID from token:", userId);
-            }
-          } catch (e) {
-            console.error("Error decoding token:", e);
-          }
           break;
         }
       }
       
-      // Try using an anonymized sign-in and then link accounts if necessary
-      if (userId) {
-        console.log("Creating user object directly with ID:", userId);
-        // Directly access user data with the ID we know
-        currentUser = { uid: userId };
-        
-        // Load user's conversations
-        getUserConversations(userId)
-          .then(conversations => {
-            displayConversationsList(conversations);
-            console.log("Successfully loaded conversations for user:", userId);
-          })
-          .catch(error => {
-            console.error("Error loading conversations:", error);
-          });
-        
-        // Display welcome message
-        if (!currentConversationId) {
-          displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+      if (idToken) {
+        // Decode the token to extract user information
+        try {
+          const tokenParts = idToken.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            const userId = payload.user_id;
+            console.log("Extracted user ID from token:", userId);
+            
+            // Direct auth bypass - create a user object for Firestore access
+            currentUser = {
+              uid: userId,
+              getIdToken: () => Promise.resolve(idToken)
+            };
+            
+            // Manual fetch to Firestore with the token in the header
+            fetchFirestoreData(userId, idToken)
+              .then(conversations => {
+                displayConversationsList(conversations);
+                console.log("Successfully loaded conversations via REST API");
+                
+                // Display welcome message
+                if (!currentConversationId) {
+                  displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+                }
+              })
+              .catch(error => {
+                console.error("Error loading conversations via REST API:", error);
+              });
+          }
+        } catch (e) {
+          console.error("Error decoding token:", e);
         }
       }
     })
@@ -96,30 +97,30 @@ function initializeChat() {
       console.error("Failed to set persistence:", error);
     });
   
-  // Also set up the auth state listener as a fallback
-  firebase.auth().onAuthStateChanged(function(user) {
+  // Also set up auth state listener as fallback
+  firebase.auth().onAuthStateChanged(user => {
     console.log("Auth state changed event fired");
     
     if (user) {
-      // User is signed in
-      currentUser = user;
       console.log("Auth state changed - User is signed in:", user.uid);
+      currentUser = user;
       
-      // Load user's conversations
-      getUserConversations(user.uid)
-        .then(conversations => {
-          displayConversationsList(conversations);
-        })
-        .catch(error => {
-          console.error("Error loading conversations:", error);
-        });
-        
-      // Check if we need to display welcome message
-      if (!currentConversationId) {
+      // Load conversations if they haven't been loaded yet
+      if (!document.querySelector('.conversation-list-item')) {
+        getUserConversations(user.uid)
+          .then(conversations => {
+            displayConversationsList(conversations);
+          })
+          .catch(error => {
+            console.error("Error loading conversations:", error);
+          });
+      }
+      
+      // Display welcome message if needed
+      if (!currentConversationId && !document.querySelector('.message.assistant')) {
         displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
       }
     } else {
-      // User is signed out
       console.log("Auth state changed - No user signed in");
     }
   });
@@ -851,3 +852,61 @@ function formatTimestamp(timestamp) {
 // Export functions for use in other files
 window.startNewChat = startNewChat;
 window.initializeChat = initializeChat;
+
+// Function to fetch Firestore data using REST API with Firebase Auth token
+async function fetchFirestoreData(userId, idToken) {
+  // Get the Firebase project ID from the firebaseConfig
+  const projectId = firebaseConfig.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Firestore API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("Firestore REST response:", data);
+    
+    // Transform Firestore REST response to the format expected by our app
+    const conversations = [];
+    if (data.documents) {
+      for (const doc of data.documents) {
+        const id = doc.name.split('/').pop();
+        const fields = doc.fields;
+        
+        const conversation = {
+          id: id,
+          title: fields.title?.stringValue || "New Conversation",
+          createdAt: new Date(fields.createdAt?.timestampValue || Date.now()),
+          updatedAt: new Date(fields.updatedAt?.timestampValue || Date.now()),
+          messages: []
+        };
+        
+        if (fields.messages?.arrayValue?.values) {
+          for (const msg of fields.messages.arrayValue.values) {
+            const msgFields = msg.mapValue.fields;
+            conversation.messages.push({
+              id: msgFields.id?.stringValue,
+              role: msgFields.role?.stringValue,
+              content: msgFields.content?.stringValue,
+              timestamp: new Date(msgFields.timestamp?.timestampValue || Date.now())
+            });
+          }
+        }
+        
+        conversations.push(conversation);
+      }
+    }
+    
+    return conversations;
+  } catch (error) {
+    console.error("Error fetching from Firestore REST API:", error);
+    throw error;
+  }
+}

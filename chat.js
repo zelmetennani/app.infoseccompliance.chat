@@ -20,43 +20,6 @@ function initializeFirebase() {
   return true;
 }
 
-// Check for auth token in cookies
-async function checkForIdTokenInCookies() {
-  const cookies = document.cookie.split(';');
-  for (let i = 0; i < cookies.length; i++) {
-    const cookie = cookies[i].trim();
-    if (cookie.startsWith('firebaseIdToken=')) {
-      const token = cookie.substring('firebaseIdToken='.length);
-      console.log("Found Firebase ID token in cookies");
-      
-      try {
-        // First set persistence to SESSION
-        await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
-        console.log("Firebase persistence set to SESSION");
-        
-        // Then try to authenticate with the token
-        const userCredential = await firebase.auth().signInWithCustomToken(token);
-        
-        // Important: Set currentUser here directly from the credential result
-        currentUser = userCredential.user;
-        
-        if (currentUser) {
-          console.log("Successfully authenticated with token from cookies:", currentUser.uid);
-          return { authenticated: true, user: currentUser };
-        } else {
-          console.error("Failed to authenticate with token from cookies: User still null after signInWithCustomToken");
-          return { authenticated: false };
-        }
-      } catch (error) {
-        console.error("Error authenticating with token from cookies:", error);
-        return { authenticated: false, error };
-      }
-    }
-  }
-  console.log("No Firebase ID token found in cookies");
-  return { authenticated: false };
-}
-
 // Main initialization function
 function initializeChat() {
   console.log("Initializing chat functionality");
@@ -69,55 +32,19 @@ function initializeChat() {
   
   // Set up event listeners
   setupEventListeners();
+
+  // Add debug info about Firebase initialization state
+  console.log("Firebase apps count:", firebase.apps.length);
+  console.log("Firebase Auth initialized:", !!firebase.auth());
   
-  // Use async function to handle the cookie auth check
-  (async function() {
-    try {
-      // Check for auth token in cookies first
-      const authResult = await checkForIdTokenInCookies();
-      
-      if (authResult.authenticated && authResult.user) {
-        console.log("User authenticated via cookie token");
-        
-        // Use the user from the auth result directly
-        currentUser = authResult.user;
-        
-        // Load user's conversations
-        const conversations = await getUserConversations(currentUser.uid);
-        displayConversationsList(conversations);
-        
-        // Display welcome message if needed
-        if (!currentConversationId) {
-          displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-        }
-      } else {
-        console.log("Cookie authentication failed, checking for current user");
-        
-        // Try to get current user as fallback
-        const immediateUser = firebase.auth().currentUser;
-        if (immediateUser) {
-          currentUser = immediateUser;
-          console.log("Current user already available:", immediateUser.uid);
-          
-          // Load user's conversations
-          const conversations = await getUserConversations(immediateUser.uid);
-          displayConversationsList(conversations);
-          
-          // Display welcome message if needed
-          if (!currentConversationId) {
-            displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-          }
-        } else {
-          console.log("No user found, waiting for auth state changes");
-        }
-      }
-    } catch (error) {
-      console.error("Error during authentication initialization:", error);
-    }
-  })();
+  // Print all cookies for debugging
+  console.log("All cookies available:", document.cookie);
   
-  // Also set up the auth state listener for future changes
+  // Key insight: In Firebase v9 compatibility mode, we need to wait for the auth state
+  // This is the pattern used in index.html that works correctly
   firebase.auth().onAuthStateChanged(function(user) {
+    console.log("Auth state changed event fired");
+    
     if (user) {
       // User is signed in
       currentUser = user;
@@ -139,6 +66,10 @@ function initializeChat() {
     } else {
       // User is signed out
       console.log("Auth state changed - No user signed in");
+      
+      // Check if we need to get the current user in a different way
+      // Important: Just log this, no extra auth attempts that might interfere
+      console.log("Current auth user check:", firebase.auth().currentUser);
     }
   });
 }
@@ -174,12 +105,16 @@ async function handleChatSubmit(event) {
   messageInput.value = '';
   
   try {
-    // Check multiple ways to get the current user
+    // Check for user in multiple ways
     let userToUse = currentUser || firebase.auth().currentUser;
     
     if (!userToUse) {
       console.error("User not authenticated");
-      displayErrorMessage("Authentication issue. Please refresh the page.");
+      console.log("Current auth state:", firebase.auth().currentUser);
+      console.log("Stored current user:", currentUser);
+      console.log("Available cookies:", document.cookie);
+      
+      displayErrorMessage("Authentication issue. Please try refreshing the page.");
       return;
     }
     

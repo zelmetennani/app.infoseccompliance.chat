@@ -40,8 +40,60 @@ function initializeChat() {
   // Print all cookies for debugging
   console.log("All cookies available:", document.cookie);
   
-  // Key insight: In Firebase v9 compatibility mode, we need to wait for the auth state
-  // This is the pattern used in index.html that works correctly
+  // Extract the token from cookies
+  const cookies = document.cookie.split(';');
+  let firebaseIdToken = null;
+  
+  for (let i = 0; i < cookies.length; i++) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith('firebaseIdToken=')) {
+      firebaseIdToken = cookie.substring('firebaseIdToken='.length);
+      console.log("Found Firebase ID token in cookies (length: " + firebaseIdToken.length + ")");
+      break;
+    }
+  }
+  
+  if (firebaseIdToken) {
+    // We found an ID token
+    console.log("Attempting to use ID token from cookies");
+    
+    try {
+      // For ID tokens, we need to create a credential first
+      // Using Google Auth Provider to create a credential from the ID token
+      const credential = firebase.auth.GoogleAuthProvider.credential(firebaseIdToken);
+      
+      // Sign in with credential
+      firebase.auth().signInWithCredential(credential)
+        .then((userCredential) => {
+          // User signed in successfully
+          currentUser = userCredential.user;
+          console.log("Successfully signed in with ID token credential:", currentUser.uid);
+          
+          // Load user's conversations
+          getUserConversations(currentUser.uid)
+            .then(conversations => {
+              displayConversationsList(conversations);
+            })
+            .catch(error => {
+              console.error("Error loading conversations:", error);
+            });
+            
+          // Check if we need to display welcome message
+          if (!currentConversationId) {
+            displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to sign in with ID token credential:", error);
+          console.log("Falling back to auth state observer");
+        });
+    } catch (error) {
+      console.error("Error creating credential from ID token:", error);
+      console.log("Falling back to auth state observer");
+    }
+  }
+  
+  // Also set up the auth state listener as a fallback
   firebase.auth().onAuthStateChanged(function(user) {
     console.log("Auth state changed event fired");
     
@@ -68,7 +120,6 @@ function initializeChat() {
       console.log("Auth state changed - No user signed in");
       
       // Check if we need to get the current user in a different way
-      // Important: Just log this, no extra auth attempts that might interfere
       console.log("Current auth user check:", firebase.auth().currentUser);
     }
   });

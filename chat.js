@@ -34,26 +34,27 @@ async function checkForIdTokenInCookies() {
         await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
         console.log("Firebase persistence set to SESSION");
         
-        // Then try to authenticate with the token by setting it directly
-        // This more closely matches how index.html handles the token
-        await firebase.auth().signInWithCustomToken(token);
+        // Then try to authenticate with the token
+        const userCredential = await firebase.auth().signInWithCustomToken(token);
         
-        currentUser = firebase.auth().currentUser;
+        // Important: Set currentUser here directly from the credential result
+        currentUser = userCredential.user;
+        
         if (currentUser) {
           console.log("Successfully authenticated with token from cookies:", currentUser.uid);
-          return true;
+          return { authenticated: true, user: currentUser };
         } else {
           console.error("Failed to authenticate with token from cookies: User still null after signInWithCustomToken");
-          return false;
+          return { authenticated: false };
         }
       } catch (error) {
         console.error("Error authenticating with token from cookies:", error);
-        return false;
+        return { authenticated: false, error };
       }
     }
   }
   console.log("No Firebase ID token found in cookies");
-  return false;
+  return { authenticated: false };
 }
 
 // Main initialization function
@@ -73,10 +74,13 @@ function initializeChat() {
   (async function() {
     try {
       // Check for auth token in cookies first
-      const authenticated = await checkForIdTokenInCookies();
+      const authResult = await checkForIdTokenInCookies();
       
-      if (authenticated) {
+      if (authResult.authenticated && authResult.user) {
         console.log("User authenticated via cookie token");
+        
+        // Use the user from the auth result directly
+        currentUser = authResult.user;
         
         // Load user's conversations
         const conversations = await getUserConversations(currentUser.uid);

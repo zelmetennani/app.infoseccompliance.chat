@@ -158,7 +158,7 @@ async function handleChatSubmit(event) {
         return;
       }
       
-      // Get AI response (without context for simplicity)
+      // Get AI response
       const aiResponse = await sendToAI(message, []);
       
       // Hide typing indicator
@@ -169,12 +169,14 @@ async function handleChatSubmit(event) {
       
       if (!currentConversationId) {
         // Create new conversation via REST
-        currentConversationId = await createConversationViaREST(
+        const result = await createConversationViaREST(
           currentUser.uid, 
           message, 
           await currentUser.getIdToken(),
           aiResponse
         );
+        
+        currentConversationId = result.conversationId;
         
         // Refresh conversation list
         const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
@@ -1042,12 +1044,26 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
   const projectId = firebaseConfig.projectId;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations`;
   
+  // Ensure we have all required values
+  if (!userMessage) {
+    console.error("User message is required");
+    throw new Error("User message is required");
+  }
+  
+  if (!aiResponse) {
+    // If no AI response is provided, get one
+    aiResponse = await sendToAI(userMessage, []);
+  }
+  
   const title = generateTitle(userMessage);
   const timestamp = new Date().toISOString();
+  const userMsgId = generateId();
+  const aiMsgId = generateId();
   
+  // Create properly formatted document for Firestore REST API
   const conversationData = {
     fields: {
-      title: { stringValue: title },
+      title: { stringValue: title || "New Conversation" },
       createdAt: { timestampValue: timestamp },
       updatedAt: { timestampValue: timestamp },
       messages: {
@@ -1057,8 +1073,8 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
             {
               mapValue: {
                 fields: {
-                  id: { stringValue: generateId() },
-                  role: { stringValue: 'user' },
+                  id: { stringValue: userMsgId },
+                  role: { stringValue: "user" },
                   content: { stringValue: userMessage },
                   timestamp: { timestampValue: timestamp }
                 }
@@ -1068,10 +1084,10 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
             {
               mapValue: {
                 fields: {
-                  id: { stringValue: generateId() },
-                  role: { stringValue: 'assistant' },
+                  id: { stringValue: aiMsgId },
+                  role: { stringValue: "assistant" },
                   content: { stringValue: aiResponse },
-                  timestamp: { timestampValue: new Date().toISOString() }
+                  timestamp: { timestampValue: timestamp }
                 }
               }
             }
@@ -1080,6 +1096,8 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
       }
     }
   };
+  
+  console.log("Creating conversation with data:", JSON.stringify(conversationData));
   
   try {
     const response = await fetch(url, {
@@ -1092,13 +1110,18 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
     });
     
     if (!response.ok) {
-      console.error("Failed to create conversation:", await response.text());
+      const errorText = await response.text();
+      console.error("Failed to create conversation:", errorText);
       throw new Error(`Firestore API error: ${response.status}`);
     }
     
     const data = await response.json();
+    
     // Extract conversation ID from the name path
-    return data.name.split('/').pop();
+    const conversationId = data.name.split('/').pop();
+    
+    // Return the conversation ID and AI response
+    return { conversationId, aiResponse };
   } catch (error) {
     console.error("Error creating conversation:", error);
     throw error;

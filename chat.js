@@ -497,46 +497,83 @@ async function sendToAI(message, context) {
   console.log("Sending message to AI via chat.js");
   
   try {
-    // Get base URL dynamically
-    const baseUrl = window.location.origin;
-    const url = `${baseUrl}/api/chat`;
+    // Create empty result object
+    let result = null;
     
-    const payload = {
-      message: message,
-      context: context || []
-    };
-    
-    console.log("Sending payload to AI via chat.js:", {
-      messageLength: message.length,
-      contextLength: context ? context.length : 0
-    });
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-      console.error("AI API error:", response.status);
-      throw new Error(`API error: ${response.status}`);
+    // Try first format
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, context: context || [] })
+      });
+      
+      if (response.ok) {
+        result = await response.json();
+        console.log("AI API response (format 1):", result);
+      }
+    } catch (err) {
+      console.log("Error with format 1:", err);
     }
     
-    const data = await response.json();
-    console.log("AI response data:", data);
-    
-    if (data && typeof data.response === 'string') {
-      return data.response;
-    } else if (data && typeof data.message === 'string') {
-      return data.message;
-    } else {
-      console.error("Invalid response format from AI API:", data);
-      return "I'm sorry, there was an error processing your request.";
+    // If first format failed, try second format
+    if (!result) {
+      try {
+        const response = await fetch("/api/message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history: context || [] })
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          console.log("AI API response (format 2):", result);
+        }
+      } catch (err) {
+        console.log("Error with format 2:", err);
+      }
     }
+    
+    // If both formats failed, try raw message
+    if (!result) {
+      try {
+        const response = await fetch("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: message })
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          console.log("AI API response (format 3):", result);
+        }
+      } catch (err) {
+        console.log("Error with format 3:", err);
+      }
+    }
+    
+    // Extract response from result
+    let aiResponse = null;
+    
+    if (result) {
+      // Try various response formats
+      aiResponse = result.response || result.answer || result.message || 
+                  result.content || result.text || result.result;
+      
+      if (!aiResponse && typeof result === 'string') {
+        aiResponse = result;
+      }
+    }
+    
+    // Provide default response if nothing worked
+    if (!aiResponse) {
+      console.error("Could not extract AI response from result:", result);
+      aiResponse = "I'm sorry, I couldn't generate a response. Please try again.";
+    }
+    
+    return aiResponse;
   } catch (error) {
-    console.error("Error sending message to AI:", error);
+    console.error("Error in sendToAI:", error);
     return "I'm sorry, there was an error communicating with the AI service.";
   }
 }
@@ -545,41 +582,73 @@ async function sendToAI(message, context) {
 
 // Display conversations in sidebar
 function displayConversationsList(conversations) {
-  const conversationListElement = document.getElementById('conversationList');
+  let attempts = 0;
+  const maxAttempts = 5;
   
-  if (!conversationListElement) {
-    console.warn("Conversation list element not available yet");
-    return;
-  }
-  
-  // Clear existing conversations
-  conversationListElement.innerHTML = '';
-  
-  if (!conversations || conversations.length === 0) {
-    // No conversations yet
-    const noConversationsElement = document.createElement('div');
-    noConversationsElement.className = 'no-conversations';
-    noConversationsElement.textContent = 'No conversations yet';
-    conversationListElement.appendChild(noConversationsElement);
-    return;
-  }
-  
-  // Add each conversation to the list
-  conversations.forEach(conversation => {
-    const conversationElement = document.createElement('div');
-    conversationElement.className = 'conversation-list-item';
-    conversationElement.dataset.id = conversation.id;
-    conversationElement.textContent = conversation.title || 'Untitled Conversation';
+  function tryDisplay() {
+    const conversationListElement = document.getElementById('conversationList');
     
-    // Add click event to load conversation
-    conversationElement.addEventListener('click', () => {
-      loadConversation(conversation.id);
+    if (!conversationListElement) {
+      attempts++;
+      if (attempts < maxAttempts) {
+        console.log(`Conversation list element not found, retrying... (${attempts}/${maxAttempts})`);
+        setTimeout(tryDisplay, 500); // Retry after 500ms
+        return;
+      } else {
+        console.error("Failed to find conversation list element after multiple attempts");
+        return;
+      }
+    }
+    
+    // Clear existing conversations
+    conversationListElement.innerHTML = '';
+    
+    if (!conversations || conversations.length === 0) {
+      // No conversations yet
+      conversationListElement.innerHTML = '<div class="text-center text-muted my-3">No conversations yet</div>';
+      return;
+    }
+    
+    // Add each conversation to the list
+    conversations.forEach(conversation => {
+      const conversationElement = document.createElement('div');
+      conversationElement.className = 'conversation-item d-flex align-items-center p-2 mb-1 rounded';
+      conversationElement.dataset.id = conversation.id;
+      
+      // Add chat icon
+      const iconElement = document.createElement('i');
+      iconElement.className = 'bi bi-chat-left-text me-2';
+      conversationElement.appendChild(iconElement);
+      
+      // Add conversation title
+      const titleElement = document.createElement('div');
+      titleElement.className = 'conversation-title text-truncate';
+      titleElement.textContent = conversation.title || 'Untitled Conversation';
+      conversationElement.appendChild(titleElement);
+      
+      // Add click event to load conversation
+      conversationElement.addEventListener('click', () => {
+        loadConversation(conversation.id);
+      });
+      
+      // Add hover effect with CSS
+      conversationElement.style.cursor = 'pointer';
+      conversationElement.style.transition = 'background-color 0.2s';
+      conversationElement.addEventListener('mouseover', () => {
+        conversationElement.style.backgroundColor = '#f0f0f0';
+      });
+      conversationElement.addEventListener('mouseout', () => {
+        conversationElement.style.backgroundColor = '';
+      });
+      
+      conversationListElement.appendChild(conversationElement);
     });
     
-    conversationListElement.appendChild(conversationElement);
-  });
+    console.log("Displayed conversations:", conversations.length);
+  }
   
-  console.log("Displayed conversations:", conversations.length);
+  // Start the first attempt
+  tryDisplay();
 }
 
 // Load a conversation into the chat window
@@ -1005,56 +1074,65 @@ async function checkUserLimitsViaREST(userId, idToken) {
   }
 }
 
-// Create user document via REST API
+// Create user document via REST API with proper error handling
 async function createUserDocumentViaREST(userId, idToken) {
   const projectId = firebaseConfig.projectId;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+  const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
   
-  // First check if user document exists
   try {
-    const checkResponse = await fetch(url, {
+    console.log("Checking if user document exists...");
+    const checkResponse = await fetch(userUrl, {
       headers: {
         'Authorization': `Bearer ${idToken}`
       }
     });
     
-    if (checkResponse.ok) {
-      // Document exists, no need to create
-      return;
-    }
-    
-    // Document doesn't exist, create it
-    const userData = {
-      fields: {
-        subscription: {
-          mapValue: {
-            fields: {
-              tier: { stringValue: 'free' },
-              status: { stringValue: 'active' }
+    if (checkResponse.status === 404) {
+      console.log("User document doesn't exist, creating it...");
+      
+      // Document doesn't exist, create it
+      const createData = {
+        fields: {
+          createdAt: { timestampValue: new Date().toISOString() },
+          updatedAt: { timestampValue: new Date().toISOString() },
+          usageCount: { integerValue: 0 },
+          subscription: {
+            mapValue: {
+              fields: {
+                tier: { stringValue: "free" },
+                status: { stringValue: "active" }
+              }
             }
           }
+        }
+      };
+      
+      const createResponse = await fetch(userUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
         },
-        usageCount: { integerValue: 0 },
-        createdAt: { timestampValue: new Date().toISOString() }
+        body: JSON.stringify(createData)
+      });
+      
+      if (!createResponse.ok) {
+        console.error("Failed to create user document:", await createResponse.text());
+        return false;
       }
-    };
-    
-    const createResponse = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify(userData)
-    });
-    
-    if (!createResponse.ok) {
-      console.error("Failed to create user document:", await createResponse.text());
-      throw new Error(`Firestore API error: ${createResponse.status}`);
+      
+      console.log("User document created successfully");
+      return true;
+    } else if (checkResponse.ok) {
+      console.log("User document already exists");
+      return true;
+    } else {
+      console.error("Error checking user document:", checkResponse.status);
+      return false;
     }
   } catch (error) {
     console.error("Error creating user document:", error);
-    throw error;
+    return false;
   }
 }
 

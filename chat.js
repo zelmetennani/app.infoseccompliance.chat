@@ -158,10 +158,11 @@ async function handleChatSubmit(event) {
         return;
       }
       
-      // Get AI response
+      // Get AI response - ensure we're using our function
       const aiResponse = await sendToAI(message, []);
       console.log("AI response type:", typeof aiResponse);
       console.log("AI response length:", aiResponse ? aiResponse.length : 0);
+      console.log("AI response:", aiResponse);
       
       // Hide typing indicator
       hideTypingIndicator();
@@ -180,21 +181,32 @@ async function handleChatSubmit(event) {
           currentUser.uid, 
           message, 
           await currentUser.getIdToken(),
-          safeAiResponse // Use the safe response
+          safeAiResponse
         );
         
         currentConversationId = result.conversationId;
         
-        // Refresh conversation list
-        const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
-        displayConversationsList(conversations);
+        // Refresh conversation list - check if element exists first
+        try {
+          const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
+          
+          // Only attempt to display if the element exists
+          const conversationListElement = document.getElementById('conversationList');
+          if (conversationListElement) {
+            displayConversationsList(conversations);
+          } else {
+            console.warn("Conversation list element not found in DOM");
+          }
+        } catch (err) {
+          console.error("Error refreshing conversation list:", err);
+        }
       } else {
         // Update existing conversation with both messages
         await updateConversationViaREST(
           currentUser.uid,
           currentConversationId,
           message,
-          safeAiResponse, // Use the safe response
+          safeAiResponse,
           await currentUser.getIdToken()
         );
       }
@@ -480,49 +492,52 @@ async function sendMessageWithContext(userId, conversationId, message) {
   }
 }
 
-// Send message to AI
-async function sendToAI(message, previousMessages) {
+// Create a proper sendToAI function that will work with our chat functionality
+async function sendToAI(message, context) {
+  console.log("Sending message to AI via chat.js");
+  
   try {
-    // Format context from previous messages
-    const context = formatMessagesAsContext(previousMessages);
+    // Get base URL dynamically
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/api/chat`;
     
-    console.log("Sending message to AI service");
-    
-    // Check if Claude API key is available
-    if (!window.claudeConfig || !window.claudeConfig.apiKey) {
-      console.error("Claude API key not found");
-      return "Sorry, the AI service is currently unavailable. Please try again later.";
-    }
-    
-    // Prepare request payload
-    const requestBody = {
+    const payload = {
       message: message,
-      context: context
+      context: context || []
     };
     
-    // Send request to Netlify function
-    const response = await fetch('/.netlify/functions/claude-proxy', {
+    console.log("Sending payload to AI via chat.js:", {
+      messageLength: message.length,
+      contextLength: context ? context.length : 0
+    });
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': window.claudeConfig.apiKey
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(payload)
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API error (${response.status}):`, errorText);
-      return `Sorry, there was an error communicating with the AI service (${response.status}). Please try again later.`;
+      console.error("AI API error:", response.status);
+      throw new Error(`API error: ${response.status}`);
     }
     
     const data = await response.json();
-    console.log("Received response from AI");
+    console.log("AI response data:", data);
     
-    return data.response;
+    if (data && typeof data.response === 'string') {
+      return data.response;
+    } else if (data && typeof data.message === 'string') {
+      return data.message;
+    } else {
+      console.error("Invalid response format from AI API:", data);
+      return "I'm sorry, there was an error processing your request.";
+    }
   } catch (error) {
-    console.error("Error sending to AI:", error);
-    return "Sorry, there was an error processing your message. Please try again.";
+    console.error("Error sending message to AI:", error);
+    return "I'm sorry, there was an error communicating with the AI service.";
   }
 }
 
@@ -540,8 +555,12 @@ function displayConversationsList(conversations) {
   // Clear existing conversations
   conversationListElement.innerHTML = '';
   
-  if (conversations.length === 0) {
+  if (!conversations || conversations.length === 0) {
     // No conversations yet
+    const noConversationsElement = document.createElement('div');
+    noConversationsElement.className = 'no-conversations';
+    noConversationsElement.textContent = 'No conversations yet';
+    conversationListElement.appendChild(noConversationsElement);
     return;
   }
   
@@ -550,24 +569,17 @@ function displayConversationsList(conversations) {
     const conversationElement = document.createElement('div');
     conversationElement.className = 'conversation-list-item';
     conversationElement.dataset.id = conversation.id;
-    conversationElement.textContent = conversation.title;
+    conversationElement.textContent = conversation.title || 'Untitled Conversation';
     
+    // Add click event to load conversation
     conversationElement.addEventListener('click', () => {
-      // Set current conversation ID
-      currentConversationId = conversation.id;
-      
-      // Highlight selected conversation
-      document.querySelectorAll('.conversation-list-item').forEach(item => {
-        item.classList.remove('selected');
-      });
-      conversationElement.classList.add('selected');
-      
-      // Display messages for this conversation
-      displayConversationMessages(conversation);
+      loadConversation(conversation.id);
     });
     
     conversationListElement.appendChild(conversationElement);
   });
+  
+  console.log("Displayed conversations:", conversations.length);
 }
 
 // Load a conversation into the chat window

@@ -1230,57 +1230,6 @@
       });
     }
 
-    // Send message to AI backend
-    async function sendToAI(message, context) {
-      try {
-        console.log("Sending message to AI backend");
-        
-        // Check if Claude API key is available
-        if (!window.claudeConfig || !window.claudeConfig.apiKey) {
-          console.error("Claude API key not found");
-          return "Sorry, the AI service is currently unavailable. Please try again later.";
-        }
-        
-        // Prepare the request body
-        const requestBody = {
-          message: message,
-          context: context
-        };
-        
-        console.log("Request payload prepared:", { 
-          messageLength: message.length,
-          contextLength: context ? context.length : 0
-        });
-        
-        // Send the request to our Netlify function
-        const response = await fetch('/.netlify/functions/claude-proxy', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': window.claudeConfig.apiKey
-          },
-          body: JSON.stringify(requestBody)
-        });
-        
-        // Check if the response is ok
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`API error (${response.status}):`, errorText);
-          return `Sorry, there was an error communicating with the AI service (${response.status}). Please try again later.`;
-        }
-        
-        // Parse the response
-        const data = await response.json();
-        console.log("Received response from AI backend");
-        
-        // Return the AI's response
-        return data.response;
-      } catch (error) {
-        console.error('Error sending message to AI:', error);
-        return "Sorry, there was an error communicating with the AI service. Please try again later.";
-      }
-    }
-
     // Load user conversations
     function loadUserConversations(userId) {
       console.log("Loading user conversations for:", userId);

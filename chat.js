@@ -33,6 +33,16 @@ function initializeChat() {
   // Set up event listeners
   setupEventListeners();
   
+  // Make sure DOM is fully loaded
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeAfterDOMLoaded);
+  } else {
+    initializeAfterDOMLoaded();
+  }
+}
+
+// Initialize after DOM is loaded
+function initializeAfterDOMLoaded() {
   // Extract token from cookies
   const cookies = document.cookie.split(';');
   let idToken = null;
@@ -58,10 +68,18 @@ function initializeChat() {
           getIdToken: () => Promise.resolve(idToken)
         };
         
-        // Load conversations using REST API
-        fetchFirestoreData(userId, idToken)
+        // Ensure user document exists first
+        createUserDocumentViaREST(userId, idToken)
+          .then(() => {
+            // After ensuring user document exists, load conversations
+            return fetchFirestoreData(userId, idToken);
+          })
           .then(conversations => {
-            displayConversationsList(conversations);
+            // Check if conversation list element exists before trying to use it
+            const conversationListElement = document.getElementById('conversationList');
+            if (conversationListElement) {
+              displayConversationsList(conversations);
+            }
             
             // Display welcome message
             if (!currentConversationId) {
@@ -69,9 +87,9 @@ function initializeChat() {
             }
           })
           .catch(error => {
-            console.error("Error loading conversations");
+            console.error("Error initializing user data");
             
-            // Display welcome message even if conversations failed to load
+            // Display welcome message even if data loading failed
             if (!currentConversationId) {
               displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
             }
@@ -126,88 +144,61 @@ async function handleChatSubmit(event) {
     // Show typing indicator
     showTypingIndicator();
     
-    // Check user limits using REST API
-    const canSend = await checkUserLimitsViaREST(currentUser.uid, await currentUser.getIdToken());
-    
-    if (!canSend.allowed) {
-      // User has reached their limit
-      hideTypingIndicator();
-      showUpgradePrompt(canSend.reason);
-      return;
-    }
-    
-    if (currentConversationId) {
-      // Add to existing conversation via REST
-      await addMessageToConversationViaREST(
-        currentUser.uid, 
-        currentConversationId, 
-        message, 
-        'user', 
-        await currentUser.getIdToken()
-      );
+    try {
+      // Ensure user document exists first
+      await createUserDocumentViaREST(currentUser.uid, await currentUser.getIdToken());
       
-      // Get conversation history for context
-      const history = await getConversationHistoryViaREST(
-        currentUser.uid, 
-        currentConversationId, 
-        await currentUser.getIdToken()
-      );
+      // Check user limits using REST API
+      const canSend = await checkUserLimitsViaREST(currentUser.uid, await currentUser.getIdToken());
       
-      // Get AI response
-      const aiResponse = await sendToAI(message, history);
+      if (!canSend.allowed) {
+        // User has reached their limit
+        hideTypingIndicator();
+        showUpgradePrompt(canSend.reason);
+        return;
+      }
       
-      // Add AI response to conversation
-      await addMessageToConversationViaREST(
-        currentUser.uid, 
-        currentConversationId, 
-        aiResponse, 
-        'assistant', 
-        await currentUser.getIdToken()
-      );
-      
-      // Hide typing indicator
-      hideTypingIndicator();
-      
-      // Display AI response
-      displayMessage(aiResponse, 'assistant');
-    } else {
-      // Create new conversation via REST
-      const conversationId = await createConversationViaREST(
-        currentUser.uid, 
-        message, 
-        await currentUser.getIdToken()
-      );
-      
-      currentConversationId = conversationId;
-      
-      // Get AI response
+      // Get AI response (without context for simplicity)
       const aiResponse = await sendToAI(message, []);
       
-      // Add AI response to conversation
-      await addMessageToConversationViaREST(
-        currentUser.uid, 
-        conversationId, 
-        aiResponse, 
-        'assistant', 
-        await currentUser.getIdToken()
-      );
-      
       // Hide typing indicator
       hideTypingIndicator();
       
       // Display AI response
       displayMessage(aiResponse, 'assistant');
       
-      // Refresh conversation list
-      const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
-      displayConversationsList(conversations);
+      if (!currentConversationId) {
+        // Create new conversation via REST
+        currentConversationId = await createConversationViaREST(
+          currentUser.uid, 
+          message, 
+          await currentUser.getIdToken(),
+          aiResponse
+        );
+        
+        // Refresh conversation list
+        const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
+        displayConversationsList(conversations);
+      } else {
+        // Update existing conversation with both messages
+        await updateConversationViaREST(
+          currentUser.uid,
+          currentConversationId,
+          message,
+          aiResponse,
+          await currentUser.getIdToken()
+        );
+      }
+      
+      // Update usage count via REST API
+      await updateUsageCountViaREST(currentUser.uid, await currentUser.getIdToken());
+    } catch (error) {
+      console.error("Error processing message:", error);
+      hideTypingIndicator();
+      displayErrorMessage("There was an error processing your message. Please try again.");
     }
-    
-    // Update usage count via REST API
-    await updateUsageCountViaREST(currentUser.uid, await currentUser.getIdToken());
-    
   } catch (error) {
-    console.error("Error sending message");
+    console.error("Error sending message:", error);
     hideTypingIndicator();
     displayErrorMessage("There was an error sending your message. Please try again.");
   }
@@ -530,41 +521,43 @@ async function sendToAI(message, previousMessages) {
 
 // Display conversations in sidebar
 function displayConversationsList(conversations) {
-  const conversationList = document.getElementById('conversationList');
+  const conversationListElement = document.getElementById('conversationList');
   
-  if (!conversationList) {
-    console.error("Conversation list element not found");
+  if (!conversationListElement) {
+    console.warn("Conversation list element not available yet");
     return;
   }
   
-  // Clear existing list
-  conversationList.innerHTML = '';
+  // Clear existing conversations
+  conversationListElement.innerHTML = '';
   
-  if (!conversations || conversations.length === 0) {
-    conversationList.innerHTML = '<div class="no-conversations">No conversations yet</div>';
+  if (conversations.length === 0) {
+    // No conversations yet
     return;
   }
   
-  // Add each conversation
+  // Add each conversation to the list
   conversations.forEach(conversation => {
-    const item = document.createElement('div');
-    item.className = 'conversation-item';
-    item.dataset.id = conversation.id;
+    const conversationElement = document.createElement('div');
+    conversationElement.className = 'conversation-list-item';
+    conversationElement.dataset.id = conversation.id;
+    conversationElement.textContent = conversation.title;
     
-    if (currentConversationId === conversation.id) {
-      item.classList.add('active');
-    }
+    conversationElement.addEventListener('click', () => {
+      // Set current conversation ID
+      currentConversationId = conversation.id;
+      
+      // Highlight selected conversation
+      document.querySelectorAll('.conversation-list-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      conversationElement.classList.add('selected');
+      
+      // Display messages for this conversation
+      displayConversationMessages(conversation);
+    });
     
-    const date = formatTimestamp(conversation.updatedAt);
-    
-    item.innerHTML = `
-      <div class="conversation-title">${conversation.title}</div>
-      <div class="conversation-date">${date}</div>
-    `;
-    
-    item.addEventListener('click', () => loadConversation(currentUser.uid, conversation.id));
-    
-    conversationList.appendChild(item);
+    conversationListElement.appendChild(conversationElement);
   });
 }
 
@@ -996,23 +989,36 @@ async function createUserDocumentViaREST(userId, idToken) {
   const projectId = firebaseConfig.projectId;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
   
-  const userData = {
-    fields: {
-      subscription: {
-        mapValue: {
-          fields: {
-            tier: { stringValue: 'free' },
-            status: { stringValue: 'active' }
-          }
-        }
-      },
-      usageCount: { integerValue: 0 },
-      createdAt: { timestampValue: new Date().toISOString() }
-    }
-  };
-  
+  // First check if user document exists
   try {
-    const response = await fetch(url, {
+    const checkResponse = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (checkResponse.ok) {
+      // Document exists, no need to create
+      return;
+    }
+    
+    // Document doesn't exist, create it
+    const userData = {
+      fields: {
+        subscription: {
+          mapValue: {
+            fields: {
+              tier: { stringValue: 'free' },
+              status: { stringValue: 'active' }
+            }
+          }
+        },
+        usageCount: { integerValue: 0 },
+        createdAt: { timestampValue: new Date().toISOString() }
+      }
+    };
+    
+    const createResponse = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1021,25 +1027,23 @@ async function createUserDocumentViaREST(userId, idToken) {
       body: JSON.stringify(userData)
     });
     
-    if (!response.ok) {
-      throw new Error(`Firestore API error: ${response.status}`);
+    if (!createResponse.ok) {
+      console.error("Failed to create user document:", await createResponse.text());
+      throw new Error(`Firestore API error: ${createResponse.status}`);
     }
-    
-    return await response.json();
   } catch (error) {
-    console.error("Error creating user document");
+    console.error("Error creating user document:", error);
     throw error;
   }
 }
 
-// Create conversation via REST API
-async function createConversationViaREST(userId, message, idToken) {
+// Create conversation via REST API with both user message and AI response
+async function createConversationViaREST(userId, userMessage, idToken, aiResponse) {
   const projectId = firebaseConfig.projectId;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations`;
   
-  const title = generateTitle(message);
+  const title = generateTitle(userMessage);
   const timestamp = new Date().toISOString();
-  const messageId = generateId();
   
   const conversationData = {
     fields: {
@@ -1048,16 +1052,30 @@ async function createConversationViaREST(userId, message, idToken) {
       updatedAt: { timestampValue: timestamp },
       messages: {
         arrayValue: {
-          values: [{
-            mapValue: {
-              fields: {
-                id: { stringValue: messageId },
-                role: { stringValue: 'user' },
-                content: { stringValue: message },
-                timestamp: { timestampValue: timestamp }
+          values: [
+            // User message
+            {
+              mapValue: {
+                fields: {
+                  id: { stringValue: generateId() },
+                  role: { stringValue: 'user' },
+                  content: { stringValue: userMessage },
+                  timestamp: { timestampValue: timestamp }
+                }
+              }
+            },
+            // AI response
+            {
+              mapValue: {
+                fields: {
+                  id: { stringValue: generateId() },
+                  role: { stringValue: 'assistant' },
+                  content: { stringValue: aiResponse },
+                  timestamp: { timestampValue: new Date().toISOString() }
+                }
               }
             }
-          }]
+          ]
         }
       }
     }
@@ -1074,6 +1092,7 @@ async function createConversationViaREST(userId, message, idToken) {
     });
     
     if (!response.ok) {
+      console.error("Failed to create conversation:", await response.text());
       throw new Error(`Firestore API error: ${response.status}`);
     }
     
@@ -1081,49 +1100,57 @@ async function createConversationViaREST(userId, message, idToken) {
     // Extract conversation ID from the name path
     return data.name.split('/').pop();
   } catch (error) {
-    console.error("Error creating conversation");
+    console.error("Error creating conversation:", error);
     throw error;
   }
 }
 
-// Add message to conversation via REST API
-async function addMessageToConversationViaREST(userId, conversationId, content, role, idToken) {
-  // First get current conversation to append to messages array
+// Update existing conversation with new messages
+async function updateConversationViaREST(userId, conversationId, userMessage, aiResponse, idToken) {
   const projectId = firebaseConfig.projectId;
-  const getUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
   
   try {
-    const getResponse = await fetch(getUrl, {
+    // First get current conversation
+    const getResponse = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${idToken}`
       }
     });
     
     if (!getResponse.ok) {
+      console.error("Failed to get conversation:", await getResponse.text());
       throw new Error(`Firestore API error: ${getResponse.status}`);
     }
     
     const conversationData = await getResponse.json();
     const existingMessages = conversationData.fields?.messages?.arrayValue?.values || [];
-    
-    // Add new message
-    const messageId = generateId();
     const timestamp = new Date().toISOString();
     
+    // Add both user message and AI response
     existingMessages.push({
       mapValue: {
         fields: {
-          id: { stringValue: messageId },
-          role: { stringValue: role },
-          content: { stringValue: content },
+          id: { stringValue: generateId() },
+          role: { stringValue: 'user' },
+          content: { stringValue: userMessage },
           timestamp: { timestampValue: timestamp }
         }
       }
     });
     
-    // Update conversation
-    const updateUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+    existingMessages.push({
+      mapValue: {
+        fields: {
+          id: { stringValue: generateId() },
+          role: { stringValue: 'assistant' },
+          content: { stringValue: aiResponse },
+          timestamp: { timestampValue: new Date().toISOString() }
+        }
+      }
+    });
     
+    // Update conversation
     const updateData = {
       fields: {
         updatedAt: { timestampValue: timestamp },
@@ -1135,7 +1162,7 @@ async function addMessageToConversationViaREST(userId, conversationId, content, 
       }
     };
     
-    const updateResponse = await fetch(updateUrl, {
+    const updateResponse = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1145,46 +1172,14 @@ async function addMessageToConversationViaREST(userId, conversationId, content, 
     });
     
     if (!updateResponse.ok) {
+      console.error("Failed to update conversation:", await updateResponse.text());
       throw new Error(`Firestore API error: ${updateResponse.status}`);
     }
     
-    return messageId;
+    return true;
   } catch (error) {
-    console.error("Error adding message to conversation");
+    console.error("Error updating conversation:", error);
     throw error;
-  }
-}
-
-// Get conversation history via REST API
-async function getConversationHistoryViaREST(userId, conversationId, idToken) {
-  const projectId = firebaseConfig.projectId;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${idToken}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Firestore API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    const messagesArray = data.fields?.messages?.arrayValue?.values || [];
-    
-    // Transform to the format needed for the AI
-    return messagesArray.map(msg => {
-      const fields = msg.mapValue.fields;
-      return {
-        role: fields.role.stringValue,
-        content: fields.content.stringValue
-      };
-    });
-  } catch (error) {
-    console.error("Error getting conversation history");
-    return []; // Return empty array as fallback
   }
 }
 

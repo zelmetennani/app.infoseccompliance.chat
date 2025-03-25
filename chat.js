@@ -32,96 +32,55 @@ function initializeChat() {
   
   // Set up event listeners
   setupEventListeners();
-
-  // Add debug info about Firebase initialization state
-  console.log("Firebase apps count:", firebase.apps.length);
-  console.log("Firebase Auth initialized:", !!firebase.auth());
   
-  // Print all cookies for debugging
-  console.log("All cookies available:", document.cookie);
+  // Extract token from cookies
+  const cookies = document.cookie.split(';');
+  let idToken = null;
   
-  // Set persistence to LOCAL
-  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-    .then(() => {
-      console.log("Firebase persistence set to LOCAL");
-      
-      // Extract token from cookies
-      const cookies = document.cookie.split(';');
-      let idToken = null;
-      
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.startsWith('firebaseIdToken=')) {
-          idToken = cookie.substring('firebaseIdToken='.length);
-          console.log("Found Firebase ID token in cookies");
-          break;
-        }
-      }
-      
-      if (idToken) {
-        // Sign in with the ID token
-        firebase.auth().signInWithCustomToken(idToken)
-          .catch((error) => {
-            console.error("Unable to sign in with custom token:", error);
+  for (let i = 0; i < cookies.length; i++) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith('firebaseIdToken=')) {
+      idToken = cookie.substring('firebaseIdToken='.length);
+      break;
+    }
+  }
+  
+  if (idToken) {
+    try {
+      const tokenParts = idToken.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        const userId = payload.user_id;
+        
+        // Store user information
+        currentUser = {
+          uid: userId,
+          getIdToken: () => Promise.resolve(idToken)
+        };
+        
+        // Load conversations using REST API
+        fetchFirestoreData(userId, idToken)
+          .then(conversations => {
+            displayConversationsList(conversations);
             
-            // Try decoding the token to extract user information
-            try {
-              const tokenParts = idToken.split('.');
-              if (tokenParts.length === 3) {
-                const payload = JSON.parse(atob(tokenParts[1]));
-                const userId = payload.user_id;
-                console.log("Extracted user ID from token:", userId);
-                
-                // Create a mock user object for database operations
-                // This approach bypasses normal authentication
-                currentUser = {
-                  uid: userId,
-                  getIdToken: () => Promise.resolve(idToken)
-                };
-                
-                // Display welcome message
-                displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-                
-                // Try to load conversations
-                createDatabaseProxies(userId, idToken);
-              }
-            } catch (e) {
-              console.error("Error decoding token:", e);
+            // Display welcome message
+            if (!currentConversationId) {
+              displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
+            }
+          })
+          .catch(error => {
+            console.error("Error loading conversations");
+            
+            // Display welcome message even if conversations failed to load
+            if (!currentConversationId) {
+              displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
             }
           });
       }
-    })
-    .catch(error => {
-      console.error("Failed to set persistence:", error);
-    });
-  
-  // Set up auth state listener
-  firebase.auth().onAuthStateChanged(user => {
-    console.log("Auth state changed event fired");
-    
-    if (user) {
-      console.log("Auth state changed - User is signed in:", user.uid);
-      currentUser = user;
-      
-      // Load conversations if they haven't been loaded yet
-      if (!document.querySelector('.conversation-list-item')) {
-        getUserConversations(user.uid)
-          .then(conversations => {
-            displayConversationsList(conversations);
-          })
-          .catch(error => {
-            console.error("Error loading conversations:", error);
-          });
-      }
-      
-      // Display welcome message if needed
-      if (!currentConversationId && !document.querySelector('.message.assistant')) {
-        displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-      }
-    } else {
-      console.log("Auth state changed - No user signed in");
+    } catch (e) {
+      console.error("Error processing token");
     }
-  });
+  }
 }
 
 // Call initialization when the document is loaded
@@ -155,20 +114,11 @@ async function handleChatSubmit(event) {
   messageInput.value = '';
   
   try {
-    // Check for user in multiple ways, including our manual approach
-    let userToUse = currentUser || firebase.auth().currentUser;
-    
-    if (!userToUse) {
-      console.error("User not authenticated");
-      console.log("Current auth state:", firebase.auth().currentUser);
-      console.log("Stored current user:", currentUser);
-      console.log("Available cookies:", document.cookie);
-      
+    // Check for user
+    if (!currentUser) {
       displayErrorMessage("Authentication issue. Please try refreshing the page.");
       return;
     }
-    
-    console.log("Using user:", userToUse.uid);
     
     // Display user message
     displayMessage(message, 'user');
@@ -176,8 +126,8 @@ async function handleChatSubmit(event) {
     // Show typing indicator
     showTypingIndicator();
     
-    // Check if user can send message based on tier limits
-    const canSend = await canSendMessage(userToUse.uid);
+    // Check user limits using REST API
+    const canSend = await checkUserLimitsViaREST(currentUser.uid, await currentUser.getIdToken());
     
     if (!canSend.allowed) {
       // User has reached their limit
@@ -187,20 +137,77 @@ async function handleChatSubmit(event) {
     }
     
     if (currentConversationId) {
-      // Add to existing conversation
-      await sendMessageWithContext(userToUse.uid, currentConversationId, message);
+      // Add to existing conversation via REST
+      await addMessageToConversationViaREST(
+        currentUser.uid, 
+        currentConversationId, 
+        message, 
+        'user', 
+        await currentUser.getIdToken()
+      );
+      
+      // Get conversation history for context
+      const history = await getConversationHistoryViaREST(
+        currentUser.uid, 
+        currentConversationId, 
+        await currentUser.getIdToken()
+      );
+      
+      // Get AI response
+      const aiResponse = await sendToAI(message, history);
+      
+      // Add AI response to conversation
+      await addMessageToConversationViaREST(
+        currentUser.uid, 
+        currentConversationId, 
+        aiResponse, 
+        'assistant', 
+        await currentUser.getIdToken()
+      );
+      
+      // Hide typing indicator
+      hideTypingIndicator();
+      
+      // Display AI response
+      displayMessage(aiResponse, 'assistant');
     } else {
-      // Create new conversation
-      const conversationId = await createNewConversation(userToUse.uid, message);
+      // Create new conversation via REST
+      const conversationId = await createConversationViaREST(
+        currentUser.uid, 
+        message, 
+        await currentUser.getIdToken()
+      );
+      
       currentConversationId = conversationId;
-      console.log("Created new conversation with ID:", conversationId);
+      
+      // Get AI response
+      const aiResponse = await sendToAI(message, []);
+      
+      // Add AI response to conversation
+      await addMessageToConversationViaREST(
+        currentUser.uid, 
+        conversationId, 
+        aiResponse, 
+        'assistant', 
+        await currentUser.getIdToken()
+      );
+      
+      // Hide typing indicator
+      hideTypingIndicator();
+      
+      // Display AI response
+      displayMessage(aiResponse, 'assistant');
       
       // Refresh conversation list
-      const conversations = await getUserConversations(userToUse.uid);
+      const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
       displayConversationsList(conversations);
     }
+    
+    // Update usage count via REST API
+    await updateUsageCountViaREST(currentUser.uid, await currentUser.getIdToken());
+    
   } catch (error) {
-    console.error("Error sending message:", error);
+    console.error("Error sending message");
     hideTypingIndicator();
     displayErrorMessage("There was an error sending your message. Please try again.");
   }
@@ -853,7 +860,6 @@ window.initializeChat = initializeChat;
 
 // Function to fetch Firestore data using REST API with Firebase Auth token
 async function fetchFirestoreData(userId, idToken) {
-  // Get the Firebase project ID from the firebaseConfig
   const projectId = firebaseConfig.projectId;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations`;
   
@@ -869,7 +875,6 @@ async function fetchFirestoreData(userId, idToken) {
     }
     
     const data = await response.json();
-    console.log("Firestore REST response:", data);
     
     // Transform Firestore REST response to the format expected by our app
     const conversations = [];
@@ -904,7 +909,7 @@ async function fetchFirestoreData(userId, idToken) {
     
     return conversations;
   } catch (error) {
-    console.error("Error fetching from Firestore REST API:", error);
+    console.error("Error fetching from Firestore REST API");
     throw error;
   }
 }
@@ -938,4 +943,304 @@ function createDatabaseProxies(userId, idToken) {
         };
       };
     });
+}
+
+// Check user limits via REST API
+async function checkUserLimitsViaREST(userId, idToken) {
+  const projectId = firebaseConfig.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        // User document doesn't exist yet - create it
+        await createUserDocumentViaREST(userId, idToken);
+        return { allowed: true };
+      }
+      throw new Error(`Firestore API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Extract user data
+    const usageCount = data.fields?.usageCount?.integerValue 
+      ? parseInt(data.fields.usageCount.integerValue) 
+      : 0;
+      
+    const tier = data.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
+    
+    // Check limits based on tier
+    if (tier === 'free' && usageCount >= 5) {
+      return {
+        allowed: false,
+        reason: "You've reached the maximum of 5 messages on the free tier."
+      };
+    }
+    
+    return { allowed: true };
+  } catch (error) {
+    console.error("Error checking user limits");
+    // Default to allowing the message
+    return { allowed: true };
+  }
+}
+
+// Create user document via REST API
+async function createUserDocumentViaREST(userId, idToken) {
+  const projectId = firebaseConfig.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+  
+  const userData = {
+    fields: {
+      subscription: {
+        mapValue: {
+          fields: {
+            tier: { stringValue: 'free' },
+            status: { stringValue: 'active' }
+          }
+        }
+      },
+      usageCount: { integerValue: 0 },
+      createdAt: { timestampValue: new Date().toISOString() }
+    }
+  };
+  
+  try {
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(userData)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Firestore API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error creating user document");
+    throw error;
+  }
+}
+
+// Create conversation via REST API
+async function createConversationViaREST(userId, message, idToken) {
+  const projectId = firebaseConfig.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations`;
+  
+  const title = generateTitle(message);
+  const timestamp = new Date().toISOString();
+  const messageId = generateId();
+  
+  const conversationData = {
+    fields: {
+      title: { stringValue: title },
+      createdAt: { timestampValue: timestamp },
+      updatedAt: { timestampValue: timestamp },
+      messages: {
+        arrayValue: {
+          values: [{
+            mapValue: {
+              fields: {
+                id: { stringValue: messageId },
+                role: { stringValue: 'user' },
+                content: { stringValue: message },
+                timestamp: { timestampValue: timestamp }
+              }
+            }
+          }]
+        }
+      }
+    }
+  };
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(conversationData)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Firestore API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    // Extract conversation ID from the name path
+    return data.name.split('/').pop();
+  } catch (error) {
+    console.error("Error creating conversation");
+    throw error;
+  }
+}
+
+// Add message to conversation via REST API
+async function addMessageToConversationViaREST(userId, conversationId, content, role, idToken) {
+  // First get current conversation to append to messages array
+  const projectId = firebaseConfig.projectId;
+  const getUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+  
+  try {
+    const getResponse = await fetch(getUrl, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!getResponse.ok) {
+      throw new Error(`Firestore API error: ${getResponse.status}`);
+    }
+    
+    const conversationData = await getResponse.json();
+    const existingMessages = conversationData.fields?.messages?.arrayValue?.values || [];
+    
+    // Add new message
+    const messageId = generateId();
+    const timestamp = new Date().toISOString();
+    
+    existingMessages.push({
+      mapValue: {
+        fields: {
+          id: { stringValue: messageId },
+          role: { stringValue: role },
+          content: { stringValue: content },
+          timestamp: { timestampValue: timestamp }
+        }
+      }
+    });
+    
+    // Update conversation
+    const updateUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+    
+    const updateData = {
+      fields: {
+        updatedAt: { timestampValue: timestamp },
+        messages: {
+          arrayValue: {
+            values: existingMessages
+          }
+        }
+      }
+    };
+    
+    const updateResponse = await fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(updateData)
+    });
+    
+    if (!updateResponse.ok) {
+      throw new Error(`Firestore API error: ${updateResponse.status}`);
+    }
+    
+    return messageId;
+  } catch (error) {
+    console.error("Error adding message to conversation");
+    throw error;
+  }
+}
+
+// Get conversation history via REST API
+async function getConversationHistoryViaREST(userId, conversationId, idToken) {
+  const projectId = firebaseConfig.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Firestore API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const messagesArray = data.fields?.messages?.arrayValue?.values || [];
+    
+    // Transform to the format needed for the AI
+    return messagesArray.map(msg => {
+      const fields = msg.mapValue.fields;
+      return {
+        role: fields.role.stringValue,
+        content: fields.content.stringValue
+      };
+    });
+  } catch (error) {
+    console.error("Error getting conversation history");
+    return []; // Return empty array as fallback
+  }
+}
+
+// Update usage count via REST API
+async function updateUsageCountViaREST(userId, idToken) {
+  const projectId = firebaseConfig.projectId;
+  const getUserUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+  
+  try {
+    // First get current usage count
+    const getResponse = await fetch(getUserUrl, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!getResponse.ok) {
+      if (getResponse.status === 404) {
+        // Create user document if it doesn't exist
+        await createUserDocumentViaREST(userId, idToken);
+        return;
+      }
+      throw new Error(`Firestore API error: ${getResponse.status}`);
+    }
+    
+    const userData = await getResponse.json();
+    const currentCount = userData.fields?.usageCount?.integerValue 
+      ? parseInt(userData.fields.usageCount.integerValue) 
+      : 0;
+    
+    // Only increment for free tier users
+    const tier = userData.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
+    if (tier !== 'free') {
+      return;
+    }
+    
+    // Update usage count
+    const updateData = {
+      fields: {
+        usageCount: { integerValue: currentCount + 1 }
+      }
+    };
+    
+    const updateResponse = await fetch(getUserUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(updateData)
+    });
+    
+    if (!updateResponse.ok) {
+      throw new Error(`Firestore API error: ${updateResponse.status}`);
+    }
+  } catch (error) {
+    console.error("Error updating usage count");
+  }
 }

@@ -492,89 +492,43 @@ async function sendMessageWithContext(userId, conversationId, message) {
   }
 }
 
-// Create a proper sendToAI function that will work with our chat functionality
+// Updated sendToAI function for Claude-Proxy Netlify Function
 async function sendToAI(message, context) {
-  console.log("Sending message to AI via chat.js");
+  console.log("Sending message to Claude via Netlify function proxy");
   
   try {
-    // Create empty result object
-    let result = null;
+    // Use the Netlify function endpoint (/.netlify/functions/claude-proxy)
+    const response = await fetch("/.netlify/functions/claude-proxy", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ 
+        message: message
+      })
+    });
     
-    // Try first format
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context: context || [] })
-      });
-      
-      if (response.ok) {
-        result = await response.json();
-        console.log("AI API response (format 1):", result);
-      }
-    } catch (err) {
-      console.log("Error with format 1:", err);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Claude proxy error:", response.status, errorText);
+      throw new Error(`Claude proxy error: ${response.status}`);
     }
     
-    // If first format failed, try second format
-    if (!result) {
-      try {
-        const response = await fetch("/api/message", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history: context || [] })
-        });
-        
-        if (response.ok) {
-          result = await response.json();
-          console.log("AI API response (format 2):", result);
-        }
-      } catch (err) {
-        console.log("Error with format 2:", err);
-      }
+    const result = await response.json();
+    console.log("Claude proxy response received:", result);
+    
+    // Extract response from the proxy format - it returns { message: "..." }
+    if (result && result.message) {
+      return result.message;
+    } else {
+      console.error("Unexpected proxy response format:", result);
+      throw new Error("Unexpected proxy response format");
     }
-    
-    // If both formats failed, try raw message
-    if (!result) {
-      try {
-        const response = await fetch("/api/ai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: message })
-        });
-        
-        if (response.ok) {
-          result = await response.json();
-          console.log("AI API response (format 3):", result);
-        }
-      } catch (err) {
-        console.log("Error with format 3:", err);
-      }
-    }
-    
-    // Extract response from result
-    let aiResponse = null;
-    
-    if (result) {
-      // Try various response formats
-      aiResponse = result.response || result.answer || result.message || 
-                  result.content || result.text || result.result;
-      
-      if (!aiResponse && typeof result === 'string') {
-        aiResponse = result;
-      }
-    }
-    
-    // Provide default response if nothing worked
-    if (!aiResponse) {
-      console.error("Could not extract AI response from result:", result);
-      aiResponse = "I'm sorry, I couldn't generate a response. Please try again.";
-    }
-    
-    return aiResponse;
   } catch (error) {
     console.error("Error in sendToAI:", error);
-    return "I'm sorry, there was an error communicating with the AI service.";
+    
+    // For debugging while testing, return a fallback response
+    return "I apologize, but I'm having trouble connecting to my knowledge base right now. This could be due to a temporary service disruption. Please try again in a moment.";
   }
 }
 

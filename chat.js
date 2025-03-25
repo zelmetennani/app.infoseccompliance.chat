@@ -160,12 +160,19 @@ async function handleChatSubmit(event) {
       
       // Get AI response
       const aiResponse = await sendToAI(message, []);
+      console.log("AI response type:", typeof aiResponse);
+      console.log("AI response length:", aiResponse ? aiResponse.length : 0);
       
       // Hide typing indicator
       hideTypingIndicator();
       
+      // Ensure we have a valid AI response string
+      const safeAiResponse = typeof aiResponse === 'string' && aiResponse 
+        ? aiResponse 
+        : "I'm sorry, I couldn't generate a response. Please try again.";
+      
       // Display AI response
-      displayMessage(aiResponse, 'assistant');
+      displayMessage(safeAiResponse, 'assistant');
       
       if (!currentConversationId) {
         // Create new conversation via REST
@@ -173,7 +180,7 @@ async function handleChatSubmit(event) {
           currentUser.uid, 
           message, 
           await currentUser.getIdToken(),
-          aiResponse
+          safeAiResponse // Use the safe response
         );
         
         currentConversationId = result.conversationId;
@@ -187,7 +194,7 @@ async function handleChatSubmit(event) {
           currentUser.uid,
           currentConversationId,
           message,
-          aiResponse,
+          safeAiResponse, // Use the safe response
           await currentUser.getIdToken()
         );
       }
@@ -1055,6 +1062,11 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
     aiResponse = await sendToAI(userMessage, []);
   }
   
+  // Ensure aiResponse is a string
+  if (typeof aiResponse !== 'string' || !aiResponse) {
+    aiResponse = "I'm sorry, I couldn't generate a response. Please try again.";
+  }
+  
   const title = generateTitle(userMessage);
   const timestamp = new Date().toISOString();
   const userMsgId = generateId();
@@ -1080,7 +1092,7 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
                 }
               }
             },
-            // AI response
+            // AI response - ensure content is a stringValue
             {
               mapValue: {
                 fields: {
@@ -1097,6 +1109,7 @@ async function createConversationViaREST(userId, userMessage, idToken, aiRespons
     }
   };
   
+  // Log for debugging
   console.log("Creating conversation with data:", JSON.stringify(conversationData));
   
   try {

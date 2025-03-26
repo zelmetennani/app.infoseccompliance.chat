@@ -149,7 +149,7 @@ async function handleChatSubmit(event) {
     
     try {
       // Ensure user document exists
-      await createUserDocumentViaREST(currentUser.uid, await currentUser.getIdToken());
+      await initializeUser(currentUser);
       
       // Check user limits
       const canSend = await checkUserLimits(currentUser.uid, await currentUser.getIdToken());
@@ -1141,17 +1141,23 @@ async function createUserDocumentViaREST(userId, idToken) {
     if (checkResponse.status === 404) {
       console.log("User document doesn't exist, creating it...");
       
-      // Document doesn't exist, create it
+      // Document doesn't exist, create it with complete structure
       const createData = {
         fields: {
           createdAt: { timestampValue: new Date().toISOString() },
           updatedAt: { timestampValue: new Date().toISOString() },
           usageCount: { integerValue: 0 },
+          email: { stringValue: currentUser.email || "" },
+          displayName: { stringValue: currentUser.displayName || "" },
           subscription: {
             mapValue: {
               fields: {
                 tier: { stringValue: "free" },
-                status: { stringValue: "active" }
+                status: { stringValue: "active" },
+                startDate: { timestampValue: new Date().toISOString() },
+                endDate: { nullValue: null },
+                stripeCustomerId: { nullValue: null },
+                stripeSubscriptionId: { nullValue: null }
               }
             }
           }
@@ -1414,4 +1420,48 @@ async function updateUsageCountViaREST(userId, idToken) {
     console.error("Error in updateUsageCountViaREST:", error);
     return false;
   }
+}
+
+// Make sure this function is called when a user logs in OR sends their first message
+async function initializeUser(user) {
+  if (!user) return;
+  
+  console.log("Initializing user document structure...");
+  const idToken = await user.getIdToken();
+  
+  // Log to help with debugging
+  console.log(`Creating/updating user document for ${user.uid}`);
+  
+  const userCreated = await createUserDocumentViaREST(user.uid, idToken);
+  console.log(`User document creation result: ${userCreated ? "success" : "failed"}`);
+  
+  return userCreated;
+}
+
+// Call this from the onAuthStateChanged handler
+firebase.auth().onAuthStateChanged(async (user) => {
+  if (user) {
+    // User is signed in
+    currentUser = user;
+    loggedIn = true;
+    updateUserUI(user);
+    
+    // Initialize user document with correct structure
+    await initializeUser(user);
+    
+    // Rest of your code...
+  } else {
+    // User is signed out
+    // ...
+  }
+});
+
+// Also call before first message
+async function handleChatSubmit(event) {
+  // ...
+  
+  // Ensure user document is properly structured before sending first message
+  await initializeUser(currentUser);
+  
+  // Rest of your handleChatSubmit function...
 }

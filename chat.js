@@ -719,10 +719,7 @@ async function startNewChat() {
   
   // Reset current conversation ID
   currentConversationId = null;
-  
-  // Display welcome message
-  displayMessage("Hello! I'm your InfoSec Compliance Assistant. How can I help you today?", 'assistant');
-  
+
   // Update active state in sidebar
   const items = document.querySelectorAll('.conversation-item');
   items.forEach(item => {

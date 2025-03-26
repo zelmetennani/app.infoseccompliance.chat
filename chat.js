@@ -3,6 +3,9 @@ let db;
 let currentUser;
 let currentConversationId = null;
 
+// Define constants for tier limits
+const FREE_TIER_LIMIT = 5; // 5 messages per day for free tier
+
 // Function to initialize Firebase and Firestore
 function initializeFirebase() {
   // Check if Firebase config exists and is not already initialized
@@ -145,11 +148,11 @@ async function handleChatSubmit(event) {
     showTypingIndicator();
     
     try {
-      // Ensure user document exists first
+      // Ensure user document exists
       await createUserDocumentViaREST(currentUser.uid, await currentUser.getIdToken());
       
-      // Check user limits using REST API
-      const canSend = await checkUserLimitsViaREST(currentUser.uid, await currentUser.getIdToken());
+      // Check user limits
+      const canSend = await checkUserLimits(currentUser.uid, await currentUser.getIdToken());
       
       if (!canSend.allowed) {
         // User has reached their limit
@@ -158,16 +161,27 @@ async function handleChatSubmit(event) {
         return;
       }
       
-      // Get AI response - ensure we're using our function
-      const aiResponse = await sendToAI(message, []);
-      console.log("AI response type:", typeof aiResponse);
-      console.log("AI response length:", aiResponse ? aiResponse.length : 0);
-      console.log("AI response:", aiResponse);
+      // Get conversation history for context if we have a current conversation
+      let messageContext = [];
+      if (currentConversationId) {
+        const conversation = await getConversationViaREST(
+          currentUser.uid, 
+          currentConversationId, 
+          await currentUser.getIdToken()
+        );
+        
+        if (conversation && conversation.messages) {
+          messageContext = conversation.messages;
+        }
+      }
+      
+      // Get AI response with context
+      const aiResponse = await sendToAI(message, messageContext);
       
       // Hide typing indicator
       hideTypingIndicator();
       
-      // Ensure we have a valid AI response string
+      // Ensure we have a valid response
       const safeAiResponse = typeof aiResponse === 'string' && aiResponse 
         ? aiResponse 
         : "I'm sorry, I couldn't generate a response. Please try again.";
@@ -176,7 +190,7 @@ async function handleChatSubmit(event) {
       displayMessage(safeAiResponse, 'assistant');
       
       if (!currentConversationId) {
-        // Create new conversation via REST
+        // Create new conversation
         const result = await createConversationViaREST(
           currentUser.uid, 
           message, 
@@ -186,22 +200,18 @@ async function handleChatSubmit(event) {
         
         currentConversationId = result.conversationId;
         
-        // Refresh conversation list - check if element exists first
+        // Refresh conversation list
         try {
           const conversations = await fetchFirestoreData(currentUser.uid, await currentUser.getIdToken());
-          
-          // Only attempt to display if the element exists
           const conversationListElement = document.getElementById('conversationList');
           if (conversationListElement) {
             displayConversationsList(conversations);
-          } else {
-            console.warn("Conversation list element not found in DOM");
           }
         } catch (err) {
           console.error("Error refreshing conversation list:", err);
         }
       } else {
-        // Update existing conversation with both messages
+        // Update existing conversation
         await updateConversationViaREST(
           currentUser.uid,
           currentConversationId,
@@ -211,8 +221,9 @@ async function handleChatSubmit(event) {
         );
       }
       
-      // Update usage count via REST API
+      // Update usage count
       await updateUsageCountViaREST(currentUser.uid, await currentUser.getIdToken());
+      
     } catch (error) {
       console.error("Error processing message:", error);
       hideTypingIndicator();
@@ -495,16 +506,31 @@ async function sendMessageWithContext(userId, conversationId, message) {
 // Updated sendToAI function for Claude-Proxy Netlify Function
 async function sendToAI(message, context) {
   console.log("Sending message to Claude via Netlify function proxy");
+  console.log("Context length:", context ? context.length : 0);
   
   try {
-    // Use the Netlify function endpoint (/.netlify/functions/claude-proxy)
+    // Format the context for Claude
+    let formattedContext = [];
+    
+    if (context && context.length > 0) {
+      // Take last 10 messages max to avoid context length issues
+      const recentMessages = context.slice(-10);
+      
+      formattedContext = recentMessages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
+    }
+    
+    // Use the Netlify function endpoint
     const response = await fetch("/.netlify/functions/claude-proxy", {
       method: "POST",
       headers: { 
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ 
-        message: message
+        message: message,
+        context: formattedContext
       })
     });
     
@@ -517,7 +543,7 @@ async function sendToAI(message, context) {
     const result = await response.json();
     console.log("Claude proxy response received:", result);
     
-    // Extract response from the proxy format - it returns { message: "..." }
+    // Extract response from the proxy format
     if (result && result.message) {
       return result.message;
     } else {
@@ -526,8 +552,6 @@ async function sendToAI(message, context) {
     }
   } catch (error) {
     console.error("Error in sendToAI:", error);
-    
-    // For debugging while testing, return a fallback response
     return "I apologize, but I'm having trouble connecting to my knowledge base right now. This could be due to a temporary service disruption. Please try again in a moment.";
   }
 }
@@ -783,14 +807,27 @@ function showUpgradePrompt(reason) {
   // Set up upgrade button click handler
   const upgradePremiumBtn = document.getElementById('upgradePremiumBtn');
   if (upgradePremiumBtn) {
-    upgradePremiumBtn.addEventListener('click', () => {
-      // Get current user with fallback
-      const userToUse = currentUser || firebase.auth().currentUser;
-      if (userToUse) {
-        upgradeToPaidTier(userToUse.uid, 'premium');
-      } else {
-        console.error("No user found for upgrade");
-        displayErrorMessage("Authentication issue. Please refresh and try again.");
+    upgradePremiumBtn.addEventListener('click', async () => {
+      try {
+        // Close the modal
+        const modal = bootstrap.Modal.getInstance(upgradeModal);
+        if (modal) modal.hide();
+        
+        // Show loading message
+        displayMessage("Processing your upgrade...", 'assistant');
+        
+        // Update user subscription in Firestore via REST
+        await upgradeUserSubscriptionViaREST(
+          currentUser.uid, 
+          'premium', 
+          await currentUser.getIdToken()
+        );
+        
+        // Show success message
+        displayMessage("Congratulations! You've been upgraded to the premium tier. You now have unlimited access to the chat.", 'assistant');
+      } catch (error) {
+        console.error("Error upgrading subscription:", error);
+        displayErrorMessage("There was an error processing your upgrade. Please try again.");
       }
     });
   }
@@ -800,32 +837,90 @@ function showUpgradePrompt(reason) {
   bsModal.show();
 }
 
-// Upgrade user to paid tier
-async function upgradeToPaidTier(userId, tier) {
+// Upgrade user subscription via REST API
+async function upgradeUserSubscriptionViaREST(userId, newTier, idToken) {
   try {
-    // In a real app, you would integrate with a payment processor here
-    // For now, we'll just update the user's tier in Firestore
+    const projectId = firebaseConfig.projectId;
+    const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
     
-    // Close the modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('upgradeModal'));
-    if (modal) {
-      modal.hide();
+    // Use patch to update only the subscription field
+    const response = await fetch(`${userUrl}?updateMask.fieldPaths=subscription`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify({
+        fields: {
+          subscription: {
+            mapValue: {
+              fields: {
+                tier: { stringValue: newTier },
+                startDate: { timestampValue: new Date().toISOString() },
+                status: { stringValue: 'active' }
+              }
+            }
+          }
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      console.error("Error upgrading subscription:", response.status);
+      throw new Error("Subscription upgrade failed");
     }
     
-    // Show loading message
-    displayMessage("Processing your upgrade...", 'assistant');
-    
-    // Update user subscription in Firestore
-    await updateUserSubscription(userId, tier);
-    
-    // Show success message
-    displayMessage(`Congratulations! You've been upgraded to the ${tier} tier. You now have unlimited access to the chat.`, 'assistant');
-    
+    console.log(`User ${userId} upgraded to ${newTier} tier`);
     return true;
   } catch (error) {
-    console.error("Error upgrading to paid tier:", error);
-    displayErrorMessage("There was an error processing your upgrade. Please try again.");
-    return false;
+    console.error("Error in upgradeUserSubscriptionViaREST:", error);
+    throw error;
+  }
+}
+
+// Get conversation via REST API
+async function getConversationViaREST(userId, conversationId, idToken) {
+  try {
+    const projectId = firebaseConfig.projectId;
+    const conversationUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/conversations/${conversationId}`;
+    
+    const response = await fetch(conversationUrl, {
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.error("Error fetching conversation:", response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    // Convert from Firestore format to our app format
+    const conversation = {
+      id: conversationId,
+      title: data.fields?.title?.stringValue || 'Untitled',
+      messages: []
+    };
+    
+    // Parse messages array
+    if (data.fields?.messages?.arrayValue?.values) {
+      data.fields.messages.arrayValue.values.forEach(msgValue => {
+        const fields = msgValue.mapValue.fields;
+        conversation.messages.push({
+          id: fields.id?.stringValue,
+          role: fields.role?.stringValue,
+          content: fields.content?.stringValue,
+          timestamp: fields.timestamp?.timestampValue
+        });
+      });
+    }
+    
+    return conversation;
+  } catch (error) {
+    console.error("Error in getConversationViaREST:", error);
+    return null;
   }
 }
 
@@ -980,47 +1075,43 @@ function createDatabaseProxies(userId, idToken) {
 }
 
 // Check user limits via REST API
-async function checkUserLimitsViaREST(userId, idToken) {
-  const projectId = firebaseConfig.projectId;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
-  
+async function checkUserLimits(userId, idToken) {
   try {
-    const response = await fetch(url, {
+    // Get user data
+    const projectId = firebaseConfig.projectId;
+    const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+    
+    const response = await fetch(userUrl, {
       headers: {
         'Authorization': `Bearer ${idToken}`
       }
     });
     
     if (!response.ok) {
-      if (response.status === 404) {
-        // User document doesn't exist yet - create it
-        await createUserDocumentViaREST(userId, idToken);
-        return { allowed: true };
-      }
-      throw new Error(`Firestore API error: ${response.status}`);
+      console.error("Error fetching user data:", response.status);
+      return { allowed: false, reason: "Could not verify user limits" };
     }
     
-    const data = await response.json();
+    const userData = await response.json();
     
-    // Extract user data
-    const usageCount = data.fields?.usageCount?.integerValue 
-      ? parseInt(data.fields.usageCount.integerValue) 
-      : 0;
-      
-    const tier = data.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
+    // Extract user tier and usage
+    const tier = userData.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
+    const usageCount = parseInt(userData.fields?.usageCount?.integerValue || '0');
+    
+    console.log(`User tier: ${tier}, Usage count: ${usageCount}`);
     
     // Check limits based on tier
-    if (tier === 'free' && usageCount >= 5) {
+    if (tier === 'free' && usageCount >= FREE_TIER_LIMIT) {
       return {
         allowed: false,
-        reason: "You've reached the maximum of 5 messages on the free tier."
+        reason: `You've reached the limit of ${FREE_TIER_LIMIT} messages on the free tier.`
       };
     }
     
     return { allowed: true };
   } catch (error) {
-    console.error("Error checking user limits");
-    // Default to allowing the message
+    console.error("Error checking user limits:", error);
+    // Default to allowing the message if we can't check
     return { allowed: true };
   }
 }
@@ -1262,57 +1353,56 @@ async function updateConversationViaREST(userId, conversationId, userMessage, ai
 
 // Update usage count via REST API
 async function updateUsageCountViaREST(userId, idToken) {
-  const projectId = firebaseConfig.projectId;
-  const getUserUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
-  
   try {
-    // First get current usage count
-    const getResponse = await fetch(getUserUrl, {
+    // Get user data first to check tier
+    const projectId = firebaseConfig.projectId;
+    const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+    
+    const getUserResponse = await fetch(userUrl, {
       headers: {
         'Authorization': `Bearer ${idToken}`
       }
     });
     
-    if (!getResponse.ok) {
-      if (getResponse.status === 404) {
-        // Create user document if it doesn't exist
-        await createUserDocumentViaREST(userId, idToken);
-        return;
-      }
-      throw new Error(`Firestore API error: ${getResponse.status}`);
+    if (!getUserResponse.ok) {
+      console.error("Error fetching user data for usage update");
+      return false;
     }
     
-    const userData = await getResponse.json();
-    const currentCount = userData.fields?.usageCount?.integerValue 
-      ? parseInt(userData.fields.usageCount.integerValue) 
-      : 0;
+    const userData = await getUserResponse.json();
+    const tier = userData.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
     
     // Only increment for free tier users
-    const tier = userData.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
-    if (tier !== 'free') {
-      return;
-    }
-    
-    // Update usage count
-    const updateData = {
-      fields: {
-        usageCount: { integerValue: currentCount + 1 }
+    if (tier === 'free') {
+      // Use patch method to increment the counter
+      const updateResponse = await fetch(`${userUrl}?updateMask.fieldPaths=usageCount`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          fields: {
+            usageCount: {
+              integerValue: parseInt(userData.fields?.usageCount?.integerValue || '0') + 1
+            }
+          }
+        })
+      });
+      
+      if (!updateResponse.ok) {
+        console.error("Error updating usage count");
+        return false;
       }
-    };
-    
-    const updateResponse = await fetch(getUserUrl, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify(updateData)
-    });
-    
-    if (!updateResponse.ok) {
-      throw new Error(`Firestore API error: ${updateResponse.status}`);
+      
+      console.log("Usage count updated successfully");
+      return true;
+    } else {
+      console.log("User on paid tier, not incrementing usage count");
+      return true;
     }
   } catch (error) {
-    console.error("Error updating usage count");
+    console.error("Error in updateUsageCountViaREST:", error);
+    return false;
   }
 }

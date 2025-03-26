@@ -1096,9 +1096,18 @@ async function checkUserLimits(userId, idToken) {
     
     // Extract user tier and usage
     const tier = userData.fields?.subscription?.mapValue?.fields?.tier?.stringValue || 'free';
+    const status = userData.fields?.subscription?.mapValue?.fields?.status?.stringValue || 'active';
     const usageCount = parseInt(userData.fields?.usageCount?.integerValue || '0');
     
-    console.log(`User tier: ${tier}, Usage count: ${usageCount}`);
+    console.log(`User tier: ${tier}, Status: ${status}, Usage count: ${usageCount}`);
+    
+    // Check if subscription is active
+    if (tier === 'premium' && status !== 'active') {
+      return {
+        allowed: false,
+        reason: `Your subscription is currently ${status}. Please update your payment information.`
+      };
+    }
     
     // Check limits based on tier
     if (tier === 'free' && usageCount >= FREE_TIER_LIMIT) {

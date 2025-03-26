@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "dotenv": "^16.0.3",
-    "stripe": "^14.5.0"
+    "stripe": "^14.5.0",
+    "firebase": "^10.7.0",
+    "firebase-admin": "^11.11.0"
   },
   "devDependencies": {},
   "author": "",

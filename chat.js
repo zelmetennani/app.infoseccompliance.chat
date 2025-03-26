@@ -1127,11 +1127,17 @@ async function checkUserLimits(userId, idToken) {
 
 // Create user document via REST API with proper error handling
 async function createUserDocumentViaREST(userId, idToken) {
+  // Fix the URL path format
   const projectId = firebaseConfig.projectId;
-  const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}`;
+  // Make sure projectId doesn't end with any slashes
+  const cleanProjectId = projectId.replace(/\/$/, '');
+  // Construct URL properly
+  const userUrl = `https://firestore.googleapis.com/v1/projects/${cleanProjectId}/databases/(default)/documents/users/${userId}`;
+  
+  console.log("DEBUG: User document URL:", userUrl);
   
   try {
-    console.log("Checking if user document exists...");
+    console.log("DEBUG: Checking if user document exists...");
     const checkResponse = await fetch(userUrl, {
       headers: {
         'Authorization': `Bearer ${idToken}`
@@ -1139,7 +1145,7 @@ async function createUserDocumentViaREST(userId, idToken) {
     });
     
     if (checkResponse.status === 404) {
-      console.log("User document doesn't exist, creating it...");
+      console.log("DEBUG: User document doesn't exist, creating it with subscription structure...");
       
       // Document doesn't exist, create it with complete structure
       const createData = {
@@ -1164,13 +1170,20 @@ async function createUserDocumentViaREST(userId, idToken) {
         }
       };
       
-      const createResponse = await fetch(userUrl, {
+      // POST to parent collection, not to the document path
+      const collectionUrl = userUrl.substring(0, userUrl.lastIndexOf('/'));
+      console.log("DEBUG: Creating document at URL:", collectionUrl);
+      
+      const createResponse = await fetch(collectionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${idToken}`
         },
-        body: JSON.stringify(createData)
+        body: JSON.stringify({
+          ...createData,
+          name: userUrl // Include full document path in the name field
+        })
       });
       
       if (!createResponse.ok) {
@@ -1178,7 +1191,7 @@ async function createUserDocumentViaREST(userId, idToken) {
         return false;
       }
       
-      console.log("User document created successfully");
+      console.log("DEBUG: New user document created successfully");
       return true;
     } else if (checkResponse.ok) {
       console.log("User document already exists");

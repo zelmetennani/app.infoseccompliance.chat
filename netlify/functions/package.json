@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Netlify Functions for InfoSec Compliance Chat",
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "stripe-cli": "^0.1.0"
   }
-} 
+}

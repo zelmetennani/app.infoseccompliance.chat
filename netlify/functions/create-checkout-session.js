@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     
     // Parse request body
     const data = JSON.parse(event.body);
-    const { userId, email, interval } = data;
+    const { userId, email, priceId } = data;
     
     // Verify user with Firebase Auth
     const authHeader = event.headers.authorization;
@@ -51,18 +51,13 @@ exports.handler = async (event) => {
       };
     }
     
-    // Select appropriate price ID based on interval
-    const priceId = interval === 'annual' 
-      ? process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID 
-      : process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID;
-    
     // Create a Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price: priceId,
-          quantity: 1,
+          quantity: 1
         },
       ],
       mode: 'subscription',
@@ -73,7 +68,6 @@ exports.handler = async (event) => {
       // Add metadata for better tracking
       metadata: {
         userId: userId,
-        planType: interval === 'annual' ? 'Premium Annual' : 'Premium Monthly'
       }
     });
     

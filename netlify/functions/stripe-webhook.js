@@ -1,10 +1,8 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin if not already
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+  admin.initializeApp({credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
@@ -16,7 +14,6 @@ const db = admin.firestore();
 
 exports.handler = async (event) => {
   try {
-    // Verify webhook signature
     const sig = event.headers['stripe-signature'];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
     let stripeEvent;
@@ -31,14 +28,11 @@ exports.handler = async (event) => {
       };
     }
     
-    // Log event for debugging
     console.log(`✅ Webhook received: ${stripeEvent.type}`);
-    
-    // Extract event data
     const eventType = stripeEvent.type;
     const eventData = stripeEvent.data.object;
     
-    // Handle different event types
+
     switch (eventType) {
       case 'checkout.session.completed':
         await handleSuccessfulCheckout(eventData);
@@ -92,51 +86,34 @@ exports.handler = async (event) => {
   }
 };
 
-/**
- * Handles successful checkout session completion
- * @param {Object} session - Stripe checkout session object
- */
 async function handleSuccessfulCheckout(session) {
   try {
     console.log('Processing checkout.session.completed');
-    
-    // Get customer and subscription details
     const customerId = session.customer;
     const subscriptionId = session.subscription;
-    
-    // Get user ID from session metadata or client reference
-    let userId = session.client_reference_id;
-    
-    if (!userId && session.metadata && session.metadata.userId) {
-      userId = session.metadata.userId;
+    let userId=session.client_reference_id;
+    if(!userId){
+      userId=session.metadata?.userId;
     }
-    
-    if (!userId) {
-      // If no user ID in metadata, try to find by email
-      const userEmail = session.customer_email;
-      const userSnapshot = await db.collection('users')
-        .where('email', '==', userEmail)
-        .limit(1)
-        .get();
-        
-      if (!userSnapshot.empty) {
+    if(!userId){
+      const userEmail=session.customer_email;
+      const userSnapshot=await db.collection('users').where('email','==',userEmail).limit(1).get();
+      if(!userSnapshot.empty){
         userId = userSnapshot.docs[0].id;
-      } else {
+      }else{
         console.error('❌ User not found for checkout session:', session.id);
         return;
       }
     }
     
     // Get subscription details
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    const planId = subscription.items.data[0].plan.id;
-    const planInterval = subscription.items.data[0].plan.interval;
-    
-    // Update user's subscription in Firestore
+    const subscription=await stripe.subscriptions.retrieve(subscriptionId);
+    const planId=subscription.items.data[0].plan.id;
+    const planInterval=subscription.items.data[0].plan.interval;
     await db.collection('users').doc(userId).update({
       'subscription.tier': 'premium',
       'subscription.status': 'active',
-      'subscription.startDate': admin.firestore.FieldValue.serverTimestamp(),
+      'subscription.startDate': admin.firestore.Timestamp.now(),
       'subscription.endDate': null, // ongoing subscription
       'subscription.stripeCustomerId': customerId,
       'subscription.stripeSubscriptionId': subscriptionId,
@@ -152,26 +129,15 @@ async function handleSuccessfulCheckout(session) {
   }
 }
 
-/**
- * Handles subscription updates
- * @param {Object} subscription - Stripe subscription object
- */
 async function handleSubscriptionUpdate(subscription) {
   try {
     console.log(`Processing subscription update: ${subscription.id}`);
-    
-    // Find user by Stripe customer ID
-    const customerId = subscription.customer;
-    const userSnapshot = await db.collection('users')
-      .where('subscription.stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
-      
-    if (userSnapshot.empty) {
+    const customerId=subscription.customer;
+    const userSnapshot=await db.collection('users').where('subscription.stripeCustomerId','==',customerId).limit(1).get();
+    if(userSnapshot.empty){
       console.error(`❌ User not found for Stripe customer: ${customerId}`);
       return;
     }
-    
     const userId = userSnapshot.docs[0].id;
     
     // Get subscription details
@@ -196,14 +162,11 @@ async function handleSubscriptionUpdate(subscription) {
       endDate = admin.firestore.Timestamp.fromDate(
         new Date(subscription.current_period_end * 1000)
       );
-    }
-    
-    // Update subscription details
-    await db.collection('users').doc(userId).update({
+    }await db.collection('users').doc(userId).update({
       'subscription.status': status,
       'subscription.stripePlanId': planId,
       'subscription.planInterval': planInterval,
-      'subscription.endDate': endDate,
+      'subscription.endDate':endDate,
       'subscription.lastUpdated': admin.firestore.Timestamp.serverTimestamp()
     });
     
@@ -214,29 +177,18 @@ async function handleSubscriptionUpdate(subscription) {
   }
 }
 
-/**
- * Handles subscription cancellations
- * @param {Object} subscription - Stripe subscription object
- */
 async function handleSubscriptionCancellation(subscription) {
   try {
     console.log(`Processing subscription cancellation: ${subscription.id}`);
-    
-    // Find user by Stripe customer ID
-    const customerId = subscription.customer;
-    const userSnapshot = await db.collection('users')
-      .where('subscription.stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
-      
-    if (userSnapshot.empty) {
+    const customerId=subscription.customer;
+    const userSnapshot=await db.collection('users').where('subscription.stripeCustomerId','==',customerId).limit(1).get();
+    if(userSnapshot.empty){
       console.error(`❌ User not found for Stripe customer: ${customerId}`);
       return;
     }
-    
     const userId = userSnapshot.docs[0].id;
     
-    // Calculate end date (subscription remains active until the end of the period)
+
     const endDate = new Date(subscription.current_period_end * 1000);
     
     // Update user's subscription
@@ -253,26 +205,16 @@ async function handleSubscriptionCancellation(subscription) {
   }
 }
 
-/**
- * Handles successful invoice payments
- * @param {Object} invoice - Stripe invoice object
- */
 async function handleSuccessfulPayment(invoice) {
   try {
     console.log(`Processing successful payment: ${invoice.id}`);
-    
-    // Skip if not subscription related
-    if (!invoice.subscription) {
+    if(!invoice.subscription){
       console.log('Invoice not related to a subscription, skipping');
       return;
     }
-    
-    // Find user by Stripe customer ID
-    const customerId = invoice.customer;
-    const userSnapshot = await db.collection('users')
-      .where('subscription.stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
+    const customerId=invoice.customer;
+    const userSnapshot=await db.collection('users').where('subscription.stripeCustomerId','==',customerId).limit(1).get();
+
       
     if (userSnapshot.empty) {
       console.error(`❌ User not found for Stripe customer: ${customerId}`);
@@ -281,7 +223,6 @@ async function handleSuccessfulPayment(invoice) {
     
     const userId = userSnapshot.docs[0].id;
     
-    // Update payment status and reset any past due status
     await db.collection('users').doc(userId).update({
       'subscription.status': 'active',
       'subscription.lastPaymentDate': admin.firestore.Timestamp.fromDate(
@@ -297,26 +238,16 @@ async function handleSuccessfulPayment(invoice) {
   }
 }
 
-/**
- * Handles failed invoice payments
- * @param {Object} invoice - Stripe invoice object
- */
 async function handleFailedPayment(invoice) {
   try {
     console.log(`Processing failed payment: ${invoice.id}`);
-    
-    // Skip if not subscription related
-    if (!invoice.subscription) {
+    if(!invoice.subscription){
       console.log('Invoice not related to a subscription, skipping');
       return;
     }
-    
-    // Find user by Stripe customer ID
-    const customerId = invoice.customer;
-    const userSnapshot = await db.collection('users')
-      .where('subscription.stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
+    const customerId=invoice.customer;
+    const userSnapshot=await db.collection('users').where('subscription.stripeCustomerId','==',customerId).limit(1).get();
+
       
     if (userSnapshot.empty) {
       console.error(`❌ User not found for Stripe customer: ${customerId}`);
@@ -324,7 +255,6 @@ async function handleFailedPayment(invoice) {
     }
     
     const userId = userSnapshot.docs[0].id;
-    
     // Update payment status to past_due
     await db.collection('users').doc(userId).update({
       'subscription.status': 'past_due',
@@ -341,27 +271,17 @@ async function handleFailedPayment(invoice) {
   }
 }
 
-/**
- * Handles customer creation
- * @param {Object} customer - Stripe customer object
- */
 async function handleCustomerCreated(customer) {
   try {
     console.log(`Processing customer creation: ${customer.id}`);
-    
-    // Only process if we have customer's email
-    if (!customer.email) {
+    if(!customer.email){
       console.log('Customer has no email, skipping');
       return;
     }
-    
-    // Find user by email
-    const userSnapshot = await db.collection('users')
-      .where('email', '==', customer.email)
-      .limit(1)
-      .get();
-      
-    if (userSnapshot.empty) {
+    const userSnapshot=await db.collection('users').where('email','==',customer.email).limit(1).get();
+
+    if(userSnapshot.empty){
+
       console.log(`No user found with email ${customer.email}, skipping`);
       return;
     }
@@ -381,30 +301,20 @@ async function handleCustomerCreated(customer) {
   }
 }
 
-/**
- * Handles payment method changes
- * @param {Object} paymentMethod - Stripe payment method object
- * @param {String} eventType - The type of event
- */
 async function handlePaymentMethodChange(paymentMethod, eventType) {
   try {
     console.log(`Processing payment method change: ${eventType}`);
-    
-    // Get customer ID
-    const customerId = paymentMethod.customer;
-    if (!customerId) {
+    const customerId=paymentMethod.customer;
+    if(!customerId){
       console.log('Payment method not associated with a customer, skipping');
       return;
     }
-    
-    // Find user by Stripe customer ID
-    const userSnapshot = await db.collection('users')
-      .where('subscription.stripeCustomerId', '==', customerId)
-      .limit(1)
-      .get();
-      
-    if (userSnapshot.empty) {
+    const userSnapshot=await db.collection('users').where('subscription.stripeCustomerId','==',customerId).limit(1).get();
+
+    if(userSnapshot.empty){
+
       console.log(`No user found with Stripe customer ID ${customerId}, skipping`);
+
       return;
     }
     
@@ -419,21 +329,13 @@ async function handlePaymentMethodChange(paymentMethod, eventType) {
   }
 }
 
-/**
- * Handles subscription schedule changes
- * @param {Object} schedule - Stripe subscription schedule object
- * @param {String} eventType - The type of event
- */
 async function handleSubscriptionScheduleChange(schedule, eventType) {
   try {
     console.log(`Processing subscription schedule change: ${eventType}`);
-    
-    // Get customer ID
-    const customerId = schedule.customer;
-    
-    // Find user by Stripe customer ID
-    const userSnapshot = await db.collection('users')
+    const customerId=schedule.customer;
+    const userSnapshot=await db.collection('users')
       .where('subscription.stripeCustomerId', '==', customerId)
+
       .limit(1)
       .get();
       
@@ -442,19 +344,14 @@ async function handleSubscriptionScheduleChange(schedule, eventType) {
       return;
     }
     
-    const userId = userSnapshot.docs[0].id;
-    
-    if (eventType === 'subscription_schedule.canceled') {
-      // Update user record for canceled schedule
-      await db.collection('users').doc(userId).update({
+    const userId=userSnapshot.docs[0].id;
+    if(eventType==='subscription_schedule.canceled'){
+        await db.collection('users').doc(userId).update({
         'subscription.scheduleCanceled': true,
         'subscription.lastUpdated': admin.firestore.FieldValue.serverTimestamp()
       });
-      
       console.log(`✅ Subscription schedule canceled for user ${userId}`);
-    } else {
-      // Just log schedule updates - typically the actual subscription.updated event
-      // will handle the relevant changes to the user's subscription
+    }else{
       console.log(`✅ Subscription schedule updated for user ${userId}`);
     }
   } catch (error) {

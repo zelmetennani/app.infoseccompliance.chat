@@ -6,5 +6,8 @@
 		{
 			"path": "../InfosecCompliance.chat"
 		}
-	]
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "app.infoseccompliance.chat"
+	}
 }
